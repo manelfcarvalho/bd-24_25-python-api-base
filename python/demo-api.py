@@ -35,6 +35,103 @@ StatusCodes = {
     'unauthorized': 401
 }
 
+
+##########################################################
+## DEMO ENDPOINTS
+## (the endpoints get_all_departments and add_departments serve only as examples!)
+##########################################################
+
+##
+## Demo GET
+##
+## Obtain all departments in JSON format
+##
+
+@app.route('/departments/', methods=['GET'])
+def get_all_departments():
+    logger.info('GET /departments')
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute('SELECT ndep, nome, local FROM dep')
+        rows = cur.fetchall()
+
+        logger.debug('GET /departments - parse')
+        Results = []
+        for row in rows:
+            logger.debug(row)
+            content = {'ndep': int(row[0]), 'nome': row[1], 'localidade': row[2]}
+            Results.append(content)  # appending to the payload to be returned
+
+        response = {'status': StatusCodes['success'], 'results': Results}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'GET /departments - error: {error}')
+        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
+
+##
+## Demo POST
+##
+## Add a new department in a JSON payload
+##
+
+@app.route('/departments/', methods=['POST'])
+def add_departments():
+    logger.info('POST /departments')
+    payload = flask.request.get_json()
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    logger.debug(f'POST /departments - payload: {payload}')
+
+    # do not forget to validate every argument, e.g.,:
+    if 'ndep' not in payload:
+        response = {'status': StatusCodes['api_error'], 'results': 'ndep value not in payload'}
+        return flask.jsonify(response)
+
+    # parameterized queries, good for security and performance
+    statement = 'INSERT INTO dep (ndep, nome, local) VALUES (%s, %s, %s)'
+    values = (payload['ndep'], payload['localidade'], payload['nome'])
+
+    try:
+        cur.execute(statement, values)
+
+        # commit the transaction
+        conn.commit()
+        response = {'status': StatusCodes['success'], 'results': f'Inserted dep {payload["ndep"]}'}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'POST /departments - error: {error}')
+        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
+
+        # an error occurred, rollback
+        conn.rollback()
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
+
+##########################################################
+## DEMO ENDPOINTS END
+##########################################################
+
+
+
+
+
+
+
 ##########################################################
 ## DATABASE ACCESS
 ##########################################################
