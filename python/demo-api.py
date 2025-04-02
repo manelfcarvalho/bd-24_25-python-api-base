@@ -100,7 +100,7 @@ def add_departments():
 
     # parameterized queries, good for security and performance
     statement = 'INSERT INTO dep (ndep, nome, local) VALUES (%s, %s, %s)'
-    values = (payload['ndep'], payload['localidade'], payload['nome'])
+    values = (payload['ndep'], payload['nome'], payload['localidade'])
 
     try:
         cur.execute(statement, values)
