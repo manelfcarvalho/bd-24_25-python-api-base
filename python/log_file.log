@@ -1,0 +1,84 @@
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:GET /departments
+DEBUG:logger:GET /departments - parse
+DEBUG:logger:(Decimal('10'), 'Contabilidade', 'Condeixa')
+DEBUG:logger:(Decimal('20'), 'Investigacao', 'Mealhada')
+DEBUG:logger:(Decimal('30'), 'Vendas', 'Coimbra')
+DEBUG:logger:(Decimal('40'), 'Planeamento', 'Montemor')
+INFO:werkzeug:127.0.0.1 - - [20/Apr/2025 11:32:33] "GET /departments/ HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [20/Apr/2025 11:32:33] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:logger:GET /departments
+DEBUG:logger:GET /departments - parse
+DEBUG:logger:(Decimal('10'), 'Contabilidade', 'Condeixa')
+DEBUG:logger:(Decimal('20'), 'Investigacao', 'Mealhada')
+DEBUG:logger:(Decimal('30'), 'Vendas', 'Coimbra')
+DEBUG:logger:(Decimal('40'), 'Planeamento', 'Montemor')
+INFO:werkzeug:127.0.0.1 - - [20/Apr/2025 11:32:40] "GET /departments/ HTTP/1.1" 200 -
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:10:52] "[33mGET / HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:10:52] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:logger:GET /persons
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:12:01] "GET /get_persons/ HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:13:25] "[31m[1mGET /dbproj/user HTTP/1.1[0m" 405 -
+ERROR:logger:PUT /dbproj/user - error: relation "users" does not exist
+LINE 1: SELECT user_id, username, role FROM users WHERE username = '...
+                                            ^
+
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:14:21] "PUT /dbproj/user HTTP/1.1" 200 -
+ERROR:logger:PUT /dbproj/user - error: relation "users" does not exist
+LINE 1: SELECT user_id, username, role FROM users WHERE username = '...
+                                            ^
+
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:15:02] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+ERROR:logger:PUT /dbproj/user - error: relation "users" does not exist
+LINE 3:             FROM users u
+                         ^
+
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:27:34] "PUT /dbproj/user HTTP/1.1" 200 -
+ERROR:logger:PUT /dbproj/user - error: relation "users" does not exist
+LINE 3:             FROM users u
+                         ^
+
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:28:06] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:29:05] "GET /dbproj/setup-auth HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:30:01] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:30:08] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:31:46] "GET /dbproj/setup-auth HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:32:39] "[31m[1mGET /dbproj/user HTTP/1.1[0m" 405 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:32:52] "GET /dbproj/setup-auth HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:36:50] "GET /dbproj/setup-auth HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:37:07] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwicGVyc29uX2lkIjoyLCJuYW1lIjoiQWRtaW4gVXNlciIsImV4cCI6MTc0NjUyNzQwOH0.OxQObyzEZzXPtN6-zn7AVAknk2XXdgUpuflMFoMJE34
+INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:40:44] "GET /dbproj/auth-test HTTP/1.1" 200 -
+INFO:logger:API stubs online: http://127.0.0.1:8080
