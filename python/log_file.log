@@ -82,3 +82,44 @@ INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:37:07] "PUT /dbproj/user HTTP/1.1" 2
 INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwicGVyc29uX2lkIjoyLCJuYW1lIjoiQWRtaW4gVXNlciIsImV4cCI6MTc0NjUyNzQwOH0.OxQObyzEZzXPtN6-zn7AVAknk2XXdgUpuflMFoMJE34
 INFO:werkzeug:127.0.0.1 - - [05/May/2025 11:40:44] "GET /dbproj/auth-test HTTP/1.1" 200 -
 INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:GET /persons
+ERROR:logger:GET /persons - error: permission denied for table person
+
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:33:26] "[35m[1mGET /get_persons/ HTTP/1.1[0m" 500 -
+INFO:logger:POST /persons
+ERROR:logger:POST /persons - error: permission denied for table person
+
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:33:29] "[35m[1mPOST /persons/ HTTP/1.1[0m" 500 -
+INFO:logger:POST /persons
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:35:19] "[35m[1mPOST /persons/ HTTP/1.1[0m" 201 -
+INFO:logger:GET /persons
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:35:44] "GET /get_persons/ HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:36:42] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:36:46] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjEsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJ1bmtub3duIiwiZXhwIjoxNzQ2NzAwNjA2fQ.xkSYFsLIXKm7pf_eJ7pUx8BjWZS3e8e20CD4V6SBk0U
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:39:44] "[35m[1mGET /dbproj/auth-test HTTP/1.1[0m" 500 -
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjEsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJ1bmtub3duIiwiZXhwIjoxNzQ2NzAwNjA2fQ.xkSYFsLIXKm7pf_eJ7pUx8BjWZS3e8e20CD4V6SBk0U
+INFO:werkzeug:127.0.0.1 - - [07/May/2025 11:41:03] "GET /dbproj/auth-test HTTP/1.1" 200 -
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:API stubs online: http://127.0.0.1:8080

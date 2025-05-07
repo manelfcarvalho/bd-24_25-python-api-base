@@ -168,8 +168,9 @@ def token_required(f):
             # Decode and validate token
             data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=["HS256"])
             # Add user info to request context for use in endpoint functions
-            flask.g.user_id = data['user_id']
-            flask.g.username = data['username']
+            flask.g.person_id = data['person_id']
+            flask.g.name = data['name']
+            flask.g.email = data['email']
             flask.g.role = data['role']
         except jwt.ExpiredSignatureError:
             return flask.jsonify({'status': StatusCodes['unauthorized'], 'errors': 'Token has expired', 'results': None})
@@ -189,7 +190,7 @@ def add_person():
     payload = flask.request.get_json()
 
     # validação básica dos campos obrigatórios
-    required = ['name', 'age', 'gender', 'nif', 'address', 'phone']
+    required = ['name', 'age', 'gender', 'nif', 'address', 'phone', 'password']
     for field in required:
         if field not in payload:
             response = {
@@ -200,8 +201,8 @@ def add_person():
 
     stmt = '''
         INSERT INTO person
-            (name, age, gender, nif, email, address, phone)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (name, age, gender, nif, email, address, phone, password)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING person_id
     '''
     vals = (
@@ -211,7 +212,8 @@ def add_person():
         payload['nif'],
         payload.get('email'),
         payload['address'],
-        payload['phone']
+        payload['phone'],
+        payload['password']
     )
 
     conn = db_connection()
@@ -222,7 +224,13 @@ def add_person():
         conn.commit()
         response = {
             'status': StatusCodes['success'],
-            'results': {'person_id': new_id}
+            'results': {
+                'person_id': new_id,
+                'login_credentials': {
+                    'email': payload.get('email'),
+                    'password': payload['password']
+                }
+            }
         }
         return flask.jsonify(response), 201
 
@@ -296,63 +304,60 @@ def list_persons():
 @app.route('/dbproj/user', methods=['PUT'])
 def login_user():
     data = flask.request.get_json()
-    username = data.get('username')
+    email = data.get('email')
     password = data.get('password')
 
-    if not username or not password:
-        return flask.jsonify({'status': StatusCodes['api_error'], 'errors': 'Username and password are required', 'results': None})
+    if not email or not password:
+        return flask.jsonify({'status': StatusCodes['api_error'], 'errors': 'Email and password are required', 'results': None})
 
     # Connect to database
     conn = db_connection()
     cur = conn.cursor()
     
     try:
-        # Query para verificar credenciais e obter informações do usuário
-        # Juntamos com person para obter informações adicionais
+        # Query para verificar credenciais usando a tabela person
         stmt = '''
-            SELECT u.user_id, u.username, u.role, u.person_id, p.name 
-            FROM users u
-            JOIN person p ON u.person_id = p.person_id
-            WHERE u.username = %s AND u.password = %s
+            SELECT p.person_id, p.name, p.email
+            FROM person p
+            WHERE p.email = %s AND p.password = %s
         '''
-        cur.execute(stmt, (username, password))
+        cur.execute(stmt, (email, password))
         user = cur.fetchone()
         
         if user is None:
-            return flask.jsonify({'status': StatusCodes['unauthorized'], 'errors': 'Invalid username or password', 'results': None})
+            return flask.jsonify({'status': StatusCodes['unauthorized'], 'errors': 'Invalid email or password', 'results': None})
         
-        # Verificar tipo específico de usuário (student, instructor, staff)
-        user_id, username, role, person_id, name = user
+        person_id, name, email = user
         
-        # Se role não for admin, verificamos o tipo específico
-        if role != 'admin':
-            # Verificar se é estudante
-            cur.execute('SELECT person_person_id FROM student WHERE person_person_id = %s', (person_id,))
-            is_student = cur.fetchone() is not None
-            
-            # Verificar se é instructor
-            cur.execute('SELECT worker_person_person_id FROM instructor WHERE worker_person_person_id = %s', (person_id,))
-            is_instructor = cur.fetchone() is not None
-            
-            # Verificar se é staff
-            cur.execute('SELECT worker_person_person_id FROM staff WHERE worker_person_person_id = %s', (person_id,))
-            is_staff = cur.fetchone() is not None
-            
-            # Atualizar role com informação mais específica
-            if is_student:
-                role = 'student'
-            elif is_instructor:
-                role = 'instructor'
-            elif is_staff:
-                role = 'staff'
+        # Verificar tipo de usuário
+        role = 'unknown'
+        
+        # Verificar se é estudante
+        cur.execute('SELECT person_person_id FROM student WHERE person_person_id = %s', (person_id,))
+        is_student = cur.fetchone() is not None
+        
+        # Verificar se é instructor
+        cur.execute('SELECT worker_person_person_id FROM instructor WHERE worker_person_person_id = %s', (person_id,))
+        is_instructor = cur.fetchone() is not None
+        
+        # Verificar se é staff
+        cur.execute('SELECT worker_person_person_id FROM staff WHERE worker_person_person_id = %s', (person_id,))
+        is_staff = cur.fetchone() is not None
+        
+        # Determinar role
+        if is_student:
+            role = 'student'
+        elif is_instructor:
+            role = 'instructor'
+        elif is_staff:
+            role = 'staff'
         
         # Gerar token JWT com informações do usuário
         token_payload = {
-            'user_id': user_id,
-            'username': username,
-            'role': role,
             'person_id': person_id,
             'name': name,
+            'email': email,
+            'role': role,
             'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)  # Token expira em 24 horas
         }
         
@@ -591,8 +596,9 @@ def auth_test():
     """Test endpoint that demonstrates how to access the authenticated user information"""
     # Access user information from the token (stored in flask.g)
     user_info = {
-        'user_id': flask.g.user_id,
-        'username': flask.g.username,
+        'person_id': flask.g.person_id,
+        'name': flask.g.name,
+        'email': flask.g.email,
         'role': flask.g.role
     }
     
@@ -606,76 +612,144 @@ def auth_test():
     }
     return flask.jsonify(response)
 
-@app.route('/dbproj/setup-auth', methods=['GET'])
-def setup_auth_table():
-    """Endpoint para criar tabela de usuários para autenticação"""
-    conn = db_connection()
-    cur = conn.cursor()
-    
-    try:
-        # Verificar se a tabela já existe
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')")
-        table_exists = cur.fetchone()[0]
-        
-        if not table_exists:
-            # Criar tabela de usuários (relacionada com person)
-            cur.execute('''
-                CREATE TABLE users (
-                    user_id SERIAL PRIMARY KEY,
-                    username VARCHAR(50) UNIQUE NOT NULL,
-                    password VARCHAR(50) NOT NULL,
-                    role VARCHAR(20) NOT NULL,
-                    person_id BIGINT REFERENCES person(person_id)
-                )
-            ''')
-            
-            # Inserir um usuário admin para teste
-            # Primeiro criamos uma pessoa (já que person é uma tabela base)
-            cur.execute('''
-                INSERT INTO person (name, age, gender, nif, email, address, phone)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING person_id
-            ''', ('Admin User', 30, 'O', 123456789, 'admin@university.edu', 'University Campus', 912345678))
-            
-            person_id = cur.fetchone()[0]
-            
-            # Depois inserimos o usuário admin associado a essa pessoa
-            cur.execute('''
-                INSERT INTO users (username, password, role, person_id) 
-                VALUES (%s, %s, %s, %s)
-            ''', ('admin', 'admin123', 'admin', person_id))
-            
-            conn.commit()
-            return flask.jsonify({
-                'status': StatusCodes['success'], 
-                'errors': None, 
-                'results': 'Tabela de autenticação criada com sucesso. Use username: admin, password: admin123'
-            })
-        else:
-            return flask.jsonify({
-                'status': StatusCodes['success'], 
-                'errors': None, 
-                'results': 'Tabela de usuários já existe'
-            })
-            
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'GET /dbproj/setup-auth - error: {error}')
-        conn.rollback()
-        return flask.jsonify({
-            'status': StatusCodes['internal_error'], 
-            'errors': str(error), 
-            'results': None
-        })
-        
-    finally:
-        if conn is not None:
-            conn.close()
-
 @app.route('/dbproj/delete_details/<student_id>', methods=['DELETE'])
 @token_required
 def delete_student(student_id):
     response = {'status': StatusCodes['success'], 'errors': None}
     return flask.jsonify(response)
+
+@app.route('/dbproj/set-role/student/<int:person_id>', methods=['POST'])
+@token_required
+def set_student_role(person_id):
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Verificar se a person existe
+        cur.execute('SELECT person_id FROM person WHERE person_id = %s', (person_id,))
+        if cur.fetchone() is None:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Person not found',
+                'results': None
+            }), 404
+
+        # Inserir na tabela student
+        cur.execute('INSERT INTO student (person_person_id) VALUES (%s)', (person_id,))
+        conn.commit()
+        
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': f'Person {person_id} is now a student'
+        })
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error setting student role: {error}')
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+@app.route('/dbproj/set-role/instructor/<int:person_id>', methods=['POST'])
+@token_required
+def set_instructor_role(person_id):
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Verificar se a person existe
+        cur.execute('SELECT person_id FROM person WHERE person_id = %s', (person_id,))
+        if cur.fetchone() is None:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Person not found',
+                'results': None
+            }), 404
+
+        # Primeiro inserir na tabela worker
+        cur.execute('''
+            INSERT INTO worker (person_person_id, salary, start_date)
+            VALUES (%s, %s, CURRENT_DATE)
+            RETURNING worker_id
+        ''', (person_id, 0.0))  # Salary inicial 0, pode ser atualizado depois
+        worker_id = cur.fetchone()[0]
+
+        # Depois inserir na tabela instructor
+        cur.execute('INSERT INTO instructor (worker_person_person_id) VALUES (%s)', (person_id,))
+        conn.commit()
+        
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': f'Person {person_id} is now an instructor'
+        })
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error setting instructor role: {error}')
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+@app.route('/dbproj/set-role/staff/<int:person_id>', methods=['POST'])
+@token_required
+def set_staff_role(person_id):
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Verificar se a person existe
+        cur.execute('SELECT person_id FROM person WHERE person_id = %s', (person_id,))
+        if cur.fetchone() is None:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Person not found',
+                'results': None
+            }), 404
+
+        # Primeiro inserir na tabela worker
+        cur.execute('''
+            INSERT INTO worker (person_person_id, salary, start_date)
+            VALUES (%s, %s, CURRENT_DATE)
+            RETURNING worker_id
+        ''', (person_id, 0.0))  # Salary inicial 0, pode ser atualizado depois
+        worker_id = cur.fetchone()[0]
+
+        # Depois inserir na tabela staff
+        cur.execute('INSERT INTO staff (worker_person_person_id) VALUES (%s)', (person_id,))
+        conn.commit()
+        
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': f'Person {person_id} is now a staff member'
+        })
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error setting staff role: {error}')
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+
+    finally:
+        if conn is not None:
+            conn.close()
 
 if __name__ == '__main__':
     # set up logging
