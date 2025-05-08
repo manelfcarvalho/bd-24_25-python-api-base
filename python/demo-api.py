@@ -199,33 +199,105 @@ def add_person():
             }
             return flask.jsonify(response), 400
 
-    stmt = '''
-        INSERT INTO person
-            (name, age, gender, nif, email, address, phone, password)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING person_id
-    '''
-    vals = (
-        payload['name'],
-        payload['age'],
-        payload['gender'],
-        payload['nif'],
-        payload.get('email'),
-        payload['address'],
-        payload['phone'],
-        payload['password']
-    )
-
     conn = db_connection()
     cur = conn.cursor()
+    
     try:
+        # Primeiro inserir na tabela person
+        stmt = '''
+            INSERT INTO person
+                (name, age, gender, nif, email, address, phone, password)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING person_id
+        '''
+        vals = (
+            payload['name'],
+            payload['age'],
+            payload['gender'],
+            payload['nif'],
+            payload.get('email'),
+            payload['address'],
+            payload['phone'],
+            payload['password']
+        )
+
         cur.execute(stmt, vals)
-        new_id = cur.fetchone()[0]
+        person_id = cur.fetchone()[0]
+        
+        # Verificar se foi especificada uma role
+        role = payload.get('role')
+        
+        if role:
+            if role == 'student':
+                # Adicionar campos obrigatórios para student se não fornecidos
+                enrolment_date = payload.get('enrolment_date', datetime.date.today())
+                mean = payload.get('mean', 0.0)
+                
+                # Inserir na tabela student
+                cur.execute('''
+                    INSERT INTO student (person_person_id, enrolment_date, mean)
+                    VALUES (%s, %s, %s)
+                ''', (person_id, enrolment_date, mean))
+                
+            elif role in ['instructor', 'staff']:
+                # Adicionar campos obrigatórios para worker se não fornecidos
+                salary = payload.get('salary', 0.0)
+                started_working = payload.get('started_working', datetime.date.today())
+                
+                # Inserir na tabela worker
+                cur.execute('''
+                    INSERT INTO worker (person_person_id, salary, started_working)
+                    VALUES (%s, %s, %s)
+                ''', (person_id, salary, started_working))
+                
+                if role == 'instructor':
+                    # Campos obrigatórios para instructor
+                    major = payload.get('major', 'General')
+                    # Verificar se temos department_id
+                    if 'department_id' not in payload:
+                        # Se não tiver, pegar o primeiro departamento disponível
+                        cur.execute('SELECT department_id FROM department LIMIT 1')
+                        dept_result = cur.fetchone()
+                        if dept_result:
+                            department_id = dept_result[0]
+                        else:
+                            # Criar um departamento padrão se não existir nenhum
+                            cur.execute('''
+                                INSERT INTO department (name)
+                                VALUES ('Default Department')
+                                RETURNING department_id
+                            ''')
+                            department_id = cur.fetchone()[0]
+                    else:
+                        department_id = payload['department_id']
+                    
+                    # Inserir na tabela instructor
+                    cur.execute('''
+                        INSERT INTO instructor (worker_person_person_id, major, department_department_id)
+                        VALUES (%s, %s, %s)
+                    ''', (person_id, major, department_id))
+                    
+                elif role == 'staff':
+                    # Inserir na tabela staff
+                    cur.execute('''
+                        INSERT INTO staff (worker_person_person_id)
+                        VALUES (%s)
+                    ''', (person_id,))
+            else:
+                # Role inválida
+                conn.rollback()
+                response = {
+                    'status': StatusCodes['api_error'],
+                    'errors': f'Invalid role: {role}. Must be one of: student, instructor, staff'
+                }
+                return flask.jsonify(response), 400
+
         conn.commit()
         response = {
             'status': StatusCodes['success'],
             'results': {
-                'person_id': new_id,
+                'person_id': person_id,
+                'role': role,
                 'login_credentials': {
                     'email': payload.get('email'),
                     'password': payload['password']
@@ -546,26 +618,6 @@ def top3_students():
     response = {'status': StatusCodes['success'], 'errors': None, 'results': resultTop3}
     return flask.jsonify(response)
 
-@app.route('/dbproj/top_by_district', methods=['GET'])
-@token_required
-def top_by_district():
-
-    resultTopByDistrict = [ # TODO
-        {
-            'student_id': random.randint(1, 200),
-            'district': "Coimbra",
-            'average_grade': 15.2
-        },
-        {
-            'student_id': random.randint(1, 200),
-            'district': "Coimbra",
-            'average_grade': 13.6
-        }
-    ]
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultTopByDistrict}
-    return flask.jsonify(response)
-
 @app.route('/dbproj/report', methods=['GET'])
 @token_required
 def monthly_report():
@@ -612,20 +664,14 @@ def auth_test():
     }
     return flask.jsonify(response)
 
-@app.route('/dbproj/delete_details/<student_id>', methods=['DELETE'])
+@app.route('/dbproj/delete_person/<int:person_id>', methods=['DELETE'])
 @token_required
-def delete_student(student_id):
-    response = {'status': StatusCodes['success'], 'errors': None}
-    return flask.jsonify(response)
-
-@app.route('/dbproj/set-role/student/<int:person_id>', methods=['POST'])
-@token_required
-def set_student_role(person_id):
+def delete_person(person_id):
     conn = db_connection()
     cur = conn.cursor()
     
     try:
-        # Verificar se a person existe
+        # Verificar se a pessoa existe
         cur.execute('SELECT person_id FROM person WHERE person_id = %s', (person_id,))
         if cur.fetchone() is None:
             return flask.jsonify({
@@ -633,120 +679,174 @@ def set_student_role(person_id):
                 'errors': 'Person not found',
                 'results': None
             }), 404
-
-        # Inserir na tabela student
-        cur.execute('INSERT INTO student (person_person_id) VALUES (%s)', (person_id,))
-        conn.commit()
+            
+        # Verificar qual é o tipo de usuário (student, instructor, staff)
+        role = None
         
+        # Verificar se é student
+        cur.execute('SELECT person_person_id FROM student WHERE person_person_id = %s', (person_id,))
+        is_student = cur.fetchone() is not None
+        if is_student:
+            role = 'student'
+            
+        # Verificar se é instructor
+        cur.execute('SELECT worker_person_person_id FROM instructor WHERE worker_person_person_id = %s', (person_id,))
+        is_instructor = cur.fetchone() is not None
+        if is_instructor:
+            role = 'instructor'
+            
+        # Verificar se é staff
+        cur.execute('SELECT worker_person_person_id FROM staff WHERE worker_person_person_id = %s', (person_id,))
+        is_staff = cur.fetchone() is not None
+        if is_staff:
+            role = 'staff'
+            
+        # Deletar registros nas tabelas relacionadas
+        if role == 'student':
+            # Deletar referências nas tabelas relacionadas a student
+            cur.execute('DELETE FROM exam_student WHERE student_person_person_id = %s', (person_id,))
+            cur.execute('DELETE FROM student_course WHERE student_person_person_id = %s', (person_id,))
+            cur.execute('DELETE FROM extraactivities_student WHERE student_person_person_id = %s', (person_id,))
+            cur.execute('DELETE FROM attendance WHERE student_person_person_id = %s', (person_id,))
+            cur.execute('DELETE FROM result WHERE student_person_person_id = %s', (person_id,))
+            cur.execute('DELETE FROM major_info WHERE student_person_person_id = %s', (person_id,))
+            cur.execute('DELETE FROM extraactivities_fees WHERE student_person_person_id = %s', (person_id,))
+            # Deletar da tabela student
+            cur.execute('DELETE FROM student WHERE person_person_id = %s', (person_id,))
+            
+        elif role == 'instructor':
+            # Verificar se é coordinator e deletar referências
+            cur.execute('SELECT instructor_worker_person_person_id FROM coordinator WHERE instructor_worker_person_person_id = %s', (person_id,))
+            is_coordinator = cur.fetchone() is not None
+            if is_coordinator:
+                # Atualizar edições que usam este coordinator (definindo NULL ou outro coordinator)
+                cur.execute('''
+                    UPDATE edition 
+                    SET coordinator_instructor_worker_person_person_id = NULL
+                    WHERE coordinator_instructor_worker_person_person_id = %s
+                ''', (person_id,))
+                # Deletar da tabela coordinator
+                cur.execute('DELETE FROM coordinator WHERE instructor_worker_person_person_id = %s', (person_id,))
+                
+            # Verificar se é assistant e deletar referências
+            cur.execute('SELECT instructor_worker_person_person_id FROM assistant WHERE instructor_worker_person_person_id = %s', (person_id,))
+            is_assistant = cur.fetchone() is not None
+            if is_assistant:
+                # Deletar referências da tabela assistant_class
+                cur.execute('DELETE FROM assistant_class WHERE assistant_instructor_worker_person_person_id = %s', (person_id,))
+                # Deletar da tabela assistant
+                cur.execute('DELETE FROM assistant WHERE instructor_worker_person_person_id = %s', (person_id,))
+                
+            # Deletar da tabela instructor
+            cur.execute('DELETE FROM instructor WHERE worker_person_person_id = %s', (person_id,))
+            # Deletar da tabela worker
+            cur.execute('DELETE FROM worker WHERE person_person_id = %s', (person_id,))
+            
+        elif role == 'staff':
+            # Deletar da tabela staff
+            cur.execute('DELETE FROM staff WHERE worker_person_person_id = %s', (person_id,))
+            # Deletar da tabela worker
+            cur.execute('DELETE FROM worker WHERE person_person_id = %s', (person_id,))
+        
+        # Finalmente, deletar da tabela person
+        cur.execute('DELETE FROM person WHERE person_id = %s', (person_id,))
+        
+        conn.commit()
         return flask.jsonify({
             'status': StatusCodes['success'],
             'errors': None,
-            'results': f'Person {person_id} is now a student'
+            'results': f'Person with ID {person_id} successfully deleted'
         })
-
+        
     except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'Error setting student role: {error}')
+        logger.error(f'Error deleting person: {error}')
         conn.rollback()
         return flask.jsonify({
             'status': StatusCodes['internal_error'],
             'errors': str(error),
             'results': None
         }), 500
-
+        
     finally:
         if conn is not None:
             conn.close()
 
-@app.route('/dbproj/set-role/instructor/<int:person_id>', methods=['POST'])
+
+@app.route('/dbproj/student-portal', methods=['GET'])
 @token_required
-def set_instructor_role(person_id):
+def student_portal():
+    # Verificar se o usuário autenticado é um estudante
+    if flask.g.role != 'student':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'This endpoint is only available for students',
+            'results': None
+        }), 403
+    
+    # Aqui o usuário é estudante, podemos continuar
     conn = db_connection()
     cur = conn.cursor()
     
     try:
-        # Verificar se a person existe
-        cur.execute('SELECT person_id FROM person WHERE person_id = %s', (person_id,))
-        if cur.fetchone() is None:
-            return flask.jsonify({
-                'status': StatusCodes['api_error'],
-                'errors': 'Person not found',
-                'results': None
-            }), 404
-
-        # Primeiro inserir na tabela worker
-        cur.execute('''
-            INSERT INTO worker (person_person_id, salary, start_date)
-            VALUES (%s, %s, CURRENT_DATE)
-            RETURNING worker_id
-        ''', (person_id, 0.0))  # Salary inicial 0, pode ser atualizado depois
-        worker_id = cur.fetchone()[0]
-
-        # Depois inserir na tabela instructor
-        cur.execute('INSERT INTO instructor (worker_person_person_id) VALUES (%s)', (person_id,))
-        conn.commit()
+        person_id = flask.g.person_id
         
+        # Obter informações dos cursos em que o estudante está matriculado
+        cur.execute('''
+            SELECT c.course_id, c.course_name
+            FROM course c
+            JOIN student_course sc ON c.course_id = sc.course_course_id
+            WHERE sc.student_person_person_id = %s
+        ''', (person_id,))
+        
+        courses = []
+        for course_id, course_name in cur.fetchall():
+            courses.append({
+                'course_id': course_id,
+                'course_name': course_name
+            })
+        
+        # Obter atividades extracurriculares do estudante
+        cur.execute('''
+            SELECT e.activity_id, e.name, e.description
+            FROM extraactivities e
+            JOIN extraactivities_student es ON e.activity_id = es.extraactivities_activity_id
+            WHERE es.student_person_person_id = %s
+        ''', (person_id,))
+        
+        activities = []
+        for activity_id, name, description in cur.fetchall():
+            activities.append({
+                'activity_id': activity_id,
+                'name': name,
+                'description': description
+            })
+        
+        # Retornar informações do portal do estudante
         return flask.jsonify({
             'status': StatusCodes['success'],
             'errors': None,
-            'results': f'Person {person_id} is now an instructor'
+            'results': {
+                'welcome_message': f'Bem-vindo ao Portal do Estudante, {flask.g.name}!',
+                'enrolled_courses': courses,
+                'extracurricular_activities': activities,
+                'portal_features': [
+                    'Consultar notas',
+                    'Ver horário de aulas',
+                    'Gerenciar inscrições',
+                    'Acessar material de estudo',
+                    'Contactar professores'
+                ]
+            }
         })
-
+        
     except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'Error setting instructor role: {error}')
-        conn.rollback()
+        logger.error(f'Error in student portal: {error}')
         return flask.jsonify({
             'status': StatusCodes['internal_error'],
             'errors': str(error),
             'results': None
         }), 500
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-@app.route('/dbproj/set-role/staff/<int:person_id>', methods=['POST'])
-@token_required
-def set_staff_role(person_id):
-    conn = db_connection()
-    cur = conn.cursor()
-    
-    try:
-        # Verificar se a person existe
-        cur.execute('SELECT person_id FROM person WHERE person_id = %s', (person_id,))
-        if cur.fetchone() is None:
-            return flask.jsonify({
-                'status': StatusCodes['api_error'],
-                'errors': 'Person not found',
-                'results': None
-            }), 404
-
-        # Primeiro inserir na tabela worker
-        cur.execute('''
-            INSERT INTO worker (person_person_id, salary, start_date)
-            VALUES (%s, %s, CURRENT_DATE)
-            RETURNING worker_id
-        ''', (person_id, 0.0))  # Salary inicial 0, pode ser atualizado depois
-        worker_id = cur.fetchone()[0]
-
-        # Depois inserir na tabela staff
-        cur.execute('INSERT INTO staff (worker_person_person_id) VALUES (%s)', (person_id,))
-        conn.commit()
         
-        return flask.jsonify({
-            'status': StatusCodes['success'],
-            'errors': None,
-            'results': f'Person {person_id} is now a staff member'
-        })
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'Error setting staff role: {error}')
-        conn.rollback()
-        return flask.jsonify({
-            'status': StatusCodes['internal_error'],
-            'errors': str(error),
-            'results': None
-        }), 500
-
     finally:
         if conn is not None:
             conn.close()

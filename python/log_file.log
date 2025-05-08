@@ -123,3 +123,78 @@ INFO:werkzeug: * Restarting with watchdog (fsevents)
 WARNING:werkzeug: * Debugger is active!
 INFO:werkzeug: * Debugger PIN: 503-898-477
 INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:token: None
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:22:50] "GET /dbproj/auth-test HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:23:16] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjEsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJ1bmtub3duIiwiZXhwIjoxNzQ2Nzc4OTk2fQ.KqxvN--lM24t78Zr-uSvP1kDBO9GaRF3sVKXiDFuYjg
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:23:25] "GET /dbproj/auth-test HTTP/1.1" 200 -
+INFO:logger:token: None
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:25:02] "GET /dbproj/auth-test HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjEsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJ1bmtub3duIiwiZXhwIjoxNzQ2Nzc4OTk2fQ.KqxvN--lM24t78Zr-uSvP1kDBO9GaRF3sVKXiDFuYjg
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:25:12] "GET /dbproj/auth-test HTTP/1.1" 200 -
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:token: None
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:34:20] "DELETE /dbproj/delete_details/%3C1%3E HTTP/1.1" 200 -
+INFO:logger:token: None
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:34:32] "DELETE /dbproj/delete_details/1 HTTP/1.1" 200 -
+INFO:logger:token: None
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:34:51] "DELETE /dbproj/delete_details/%3Cstudent_id%3E HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:36:01] "[33mDELETE /dbproj/dbproj/delete_person/%3Cint:person_id%3E HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:36:19] "[33mDELETE /dbproj/dbproj/delete_person/%3C1%3E HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:36:40] "[33mDELETE /dbproj/dbproj/delete_person/1 HTTP/1.1[0m" 404 -
+INFO:logger:token: None
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:36:52] "DELETE /dbproj/delete_person/1 HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjEsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJ1bmtub3duIiwiZXhwIjoxNzQ2Nzc4OTk2fQ.KqxvN--lM24t78Zr-uSvP1kDBO9GaRF3sVKXiDFuYjg
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:37:15] "DELETE /dbproj/delete_person/1 HTTP/1.1" 200 -
+INFO:logger:GET /persons
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:37:41] "GET /get_persons/ HTTP/1.1" 200 -
+INFO:logger:POST /persons
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:39:26] "[35m[1mPOST /persons/ HTTP/1.1[0m" 201 -
+INFO:logger:GET /persons
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:39:31] "GET /get_persons/ HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:werkzeug: * Detected change in '/Users/manelcarvalho/Documents/GitHub/BDProjeto/python/demo-api.py', reloading
+INFO:werkzeug: * Restarting with watchdog (fsevents)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 503-898-477
+INFO:logger:token: Bearer Sample token, should be random!
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:41:37] "GET /dbproj/student-portal HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjEsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJ1bmtub3duIiwiZXhwIjoxNzQ2Nzc4OTk2fQ.KqxvN--lM24t78Zr-uSvP1kDBO9GaRF3sVKXiDFuYjg
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:41:45] "[31m[1mGET /dbproj/student-portal HTTP/1.1[0m" 403 -
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:41:53] "PUT /dbproj/user HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjIsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzQ2NzgwMTEzfQ.IBSUyyEVQm8mmGHyzs6V4m2LCseY0ONIq9ZfVea3mHs
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:42:03] "GET /dbproj/auth-test HTTP/1.1" 200 -
+INFO:logger:token: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZXJzb25faWQiOjIsIm5hbWUiOiJNYW5lbCBDYXJ2YWxobyIsImVtYWlsIjoibWFuZWxmY2FydmFsaG8wQGdtYWlsLmNvbSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzQ2NzgwMTEzfQ.IBSUyyEVQm8mmGHyzs6V4m2LCseY0ONIq9ZfVea3mHs
+INFO:werkzeug:127.0.0.1 - - [08/May/2025 09:42:13] "GET /dbproj/student-portal HTTP/1.1" 200 -
+INFO:logger:API stubs online: http://127.0.0.1:8080
+INFO:logger:API stubs online: http://127.0.0.1:8080
