@@ -851,6 +851,86 @@ def student_portal():
         if conn is not None:
             conn.close()
 
+@app.route('/dbproj/top_by_district/', methods=['GET'])
+@token_required
+def top_by_district():
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'This endpoint is only available for staff members',
+            'results': None
+        }), 403
+    
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Query para obter o melhor aluno por distrito
+        # Usando uma única query SQL com window functions
+        cur.execute('''
+            WITH student_averages AS (
+                -- Calcular média de notas por aluno
+                SELECT 
+                    s.person_person_id as student_id,
+                    p.address as district,
+                    AVG(r.grade) as average_grade,
+                    -- Rank dentro do distrito
+                    RANK() OVER (PARTITION BY p.address ORDER BY AVG(r.grade) DESC) as district_rank
+                FROM student s
+                JOIN person p ON s.person_person_id = p.person_id
+                JOIN result r ON s.person_person_id = r.student_person_person_id
+                GROUP BY s.person_person_id, p.address
+            )
+            -- Selecionar apenas os melhores de cada distrito
+            SELECT 
+                student_id,
+                district,
+                ROUND(average_grade::numeric, 2) as average_grade
+            FROM student_averages
+            WHERE district_rank = 1
+            ORDER BY average_grade DESC;
+        ''')
+        
+        results = []
+        for student_id, district, average_grade in cur.fetchall():
+            results.append({
+                'student_id': student_id,
+                'district': district,
+                'average_grade': float(average_grade)
+            })
+        
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': results
+        })
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error getting top students by district: {error}')
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+        
+    finally:
+        if conn is not None:
+            conn.close()
+
+@app.route('/dbproj/delete_details/{student_id}', methods=['DELETE'])
+@token_required
+def delete_student_details(student_id):
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'This endpoint is only available for staff members',
+            'results': None
+        }), 403
+        
+    return delete_person(student_id)  # Reutilizar a função existente
+
 if __name__ == '__main__':
     # set up logging
     logging.basicConfig(filename='log_file.log')
