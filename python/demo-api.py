@@ -450,50 +450,202 @@ def login_user():
 @app.route('/dbproj/register/student', methods=['POST'])
 @token_required
 def register_student():
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff members can register new students',
+            'results': None
+        }), 403
+
     data = flask.request.get_json()
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
 
     if not username or not email or not password:
-        return flask.jsonify({'status': StatusCodes['api_error'], 'errors': 'Username, email, and password are required', 'results': None})
+        return flask.jsonify({
+            'status': StatusCodes['api_error'],
+            'errors': 'Username, email, and password are required',
+            'results': None
+        })
     
-    resultUserId = random.randint(1, 200) # TODO
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultUserId}
-    return flask.jsonify(response)
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Inserir na tabela person primeiro
+        cur.execute('''
+            INSERT INTO person (name, email, password)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+        ''', (username, email, password))
+        
+        person_id = cur.fetchone()[0]
+        
+        # Inserir na tabela student
+        cur.execute('''
+            INSERT INTO student (person_person_id, enrolment_date)
+            VALUES (%s, CURRENT_DATE)
+        ''', (person_id,))
+        
+        conn.commit()
+        response = {'status': StatusCodes['success'], 'errors': None, 'results': person_id}
+        return flask.jsonify(response)
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        })
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/register/staff', methods=['POST'])
 @token_required
 def register_staff():
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff members can register new staff',
+            'results': None
+        }), 403
+
     data = flask.request.get_json()
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
+    salary = data.get('salary', 0.0)
 
     if not username or not email or not password:
-        return flask.jsonify({'status': StatusCodes['api_error'], 'errors': 'Username, email, and password are required', 'results': None})
+        return flask.jsonify({
+            'status': StatusCodes['api_error'],
+            'errors': 'Username, email, and password are required',
+            'results': None
+        })
     
-    resultUserId = random.randint(1, 200) # TODO
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultUserId}
-    return flask.jsonify(response)
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Inserir na tabela person primeiro
+        cur.execute('''
+            INSERT INTO person (name, email, password)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+        ''', (username, email, password))
+        
+        person_id = cur.fetchone()[0]
+        
+        # Inserir na tabela worker
+        cur.execute('''
+            INSERT INTO worker (person_person_id, salary, started_working)
+            VALUES (%s, %s, CURRENT_DATE)
+        ''', (person_id, salary))
+        
+        # Inserir na tabela staff
+        cur.execute('''
+            INSERT INTO staff (worker_person_person_id)
+            VALUES (%s)
+        ''', (person_id,))
+        
+        conn.commit()
+        response = {'status': StatusCodes['success'], 'errors': None, 'results': person_id}
+        return flask.jsonify(response)
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        })
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/register/instructor', methods=['POST'])
 @token_required
 def register_instructor():
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff members can register new instructors',
+            'results': None
+        }), 403
+
     data = flask.request.get_json()
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
+    salary = data.get('salary', 0.0)
+    major = data.get('major', 'General')
+    department_id = data.get('department_id')
 
     if not username or not email or not password:
-        return flask.jsonify({'status': StatusCodes['api_error'], 'errors': 'Username, email, and password are required', 'results': None})
+        return flask.jsonify({
+            'status': StatusCodes['api_error'],
+            'errors': 'Username, email, and password are required',
+            'results': None
+        })
     
-    resultUserId = random.randint(1, 200) # TODO
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultUserId}
-    return flask.jsonify(response)
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Se não foi fornecido department_id, pegar o primeiro disponível
+        if not department_id:
+            cur.execute('SELECT department_id FROM department LIMIT 1')
+            result = cur.fetchone()
+            if result:
+                department_id = result[0]
+            else:
+                return flask.jsonify({
+                    'status': StatusCodes['api_error'],
+                    'errors': 'No department available',
+                    'results': None
+                })
+        
+        # Inserir na tabela person primeiro
+        cur.execute('''
+            INSERT INTO person (name, email, password)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+        ''', (username, email, password))
+        
+        person_id = cur.fetchone()[0]
+        
+        # Inserir na tabela worker
+        cur.execute('''
+            INSERT INTO worker (person_person_id, salary, started_working)
+            VALUES (%s, %s, CURRENT_DATE)
+        ''', (person_id, salary))
+        
+        # Inserir na tabela instructor
+        cur.execute('''
+            INSERT INTO instructor (worker_person_person_id, major, department_department_id)
+            VALUES (%s, %s, %s)
+        ''', (person_id, major, department_id))
+        
+        conn.commit()
+        response = {'status': StatusCodes['success'], 'errors': None, 'results': person_id}
+        return flask.jsonify(response)
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        })
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/enroll_degree/<degree_id>', methods=['POST'])
 @token_required
@@ -542,105 +694,310 @@ def submit_grades(course_edition_id):
 @app.route('/dbproj/student_details/<student_id>', methods=['GET'])
 @token_required
 def student_details(student_id):
+    # Verificar se o usuário é staff ou o próprio estudante
+    if flask.g.role != 'staff' and str(flask.g.person_id) != str(student_id):
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff or the student themselves can access this information',
+            'results': None
+        }), 403
 
-    resultStudentDetails = [ # TODO
-        {
-            'course_edition_id': random.randint(1, 200),
-            'course_name': "some course",
-            'course_edition_year': 2024,
-            'grade': 12
-        },
-        {
-            'course_edition_id': random.randint(1, 200),
-            'course_name': "another course",
-            'course_edition_year': 2025,
-            'grade': 17
-        }
-    ]
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultStudentDetails}
-    return flask.jsonify(response)
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Buscar detalhes dos cursos do estudante com suas notas
+        cur.execute('''
+            SELECT 
+                e.edition_id,
+                c.name as course_name,
+                e.year,
+                r.grade
+            FROM student s
+            JOIN result r ON s.person_person_id = r.student_person_person_id
+            JOIN edition e ON r.edition_edition_id = e.edition_id
+            JOIN course c ON e.course_course_id = c.course_id
+            WHERE s.person_person_id = %s
+            ORDER BY e.year DESC, e.edition_id DESC
+        ''', (student_id,))
+        
+        results = []
+        for edition_id, course_name, year, grade in cur.fetchall():
+            results.append({
+                'course_edition_id': edition_id,
+                'course_name': course_name,
+                'course_edition_year': year,
+                'grade': float(grade) if grade is not None else None
+            })
+            
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': results
+        })
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error getting student details: {error}')
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+        
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/degree_details/<degree_id>', methods=['GET'])
 @token_required
 def degree_details(degree_id):
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff members can access this information',
+            'results': None
+        }), 403
 
-    resultDegreeDetails = [ # TODO
-        {
-            'course_id': random.randint(1, 200),
-            'course_name': "some coure",
-            'course_edition_id': random.randint(1, 200),
-            'course_edition_year': 2023,
-            'capacity': 30,
-            'enrolled_count': 27,
-            'approved_count': 20,
-            'coordinator_id': random.randint(1, 200),
-            'instructors': [random.randint(1, 200), random.randint(1, 200)]
-        }
-    ]
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultDegreeDetails}
-    return flask.jsonify(response)
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Query única para obter todos os detalhes necessários
+        cur.execute('''
+            WITH enrolled_counts AS (
+                SELECT 
+                    e.edition_id,
+                    COUNT(DISTINCT sc.student_person_person_id) as enrolled_count,
+                    COUNT(DISTINCT CASE WHEN r.grade >= 10 THEN r.student_person_person_id END) as approved_count
+                FROM edition e
+                LEFT JOIN student_course sc ON e.edition_id = sc.edition_edition_id
+                LEFT JOIN result r ON e.edition_id = r.edition_edition_id
+                GROUP BY e.edition_id
+            ),
+            edition_instructors AS (
+                SELECT 
+                    e.edition_id,
+                    ARRAY_AGG(DISTINCT i.worker_person_person_id) as instructor_ids
+                FROM edition e
+                LEFT JOIN instructor i ON e.coordinator_instructor_worker_person_person_id = i.worker_person_person_id
+                GROUP BY e.edition_id
+            )
+            SELECT 
+                c.course_id,
+                c.name as course_name,
+                e.edition_id,
+                e.year,
+                e.capacity,
+                ec.enrolled_count,
+                ec.approved_count,
+                e.coordinator_instructor_worker_person_person_id,
+                ei.instructor_ids
+            FROM course c
+            JOIN edition e ON c.course_id = e.course_course_id
+            JOIN enrolled_counts ec ON e.edition_id = ec.edition_id
+            JOIN edition_instructors ei ON e.edition_id = ei.edition_id
+            WHERE c.degree_degree_id = %s
+            ORDER BY e.year DESC, c.name
+        ''', (degree_id,))
+        
+        results = []
+        for row in cur.fetchall():
+            results.append({
+                'course_id': row[0],
+                'course_name': row[1],
+                'course_edition_id': row[2],
+                'course_edition_year': row[3],
+                'capacity': row[4],
+                'enrolled_count': row[5],
+                'approved_count': row[6],
+                'coordinator_id': row[7],
+                'instructors': row[8] if row[8] is not None else []
+            })
+            
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': results
+        })
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error getting degree details: {error}')
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+        
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/top3', methods=['GET'])
 @token_required
 def top3_students():
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff members can access this information',
+            'results': None
+        }), 403
 
-    resultTop3 = [ # TODO
-        {
-            'student_name': "John Doe",
-            'average_grade': 15.1,
-            'grades': [
-                {
-                    'course_edition_id': random.randint(1, 200),
-                    'course_edition_name': "some course",
-                    'grade': 15.1,
-                    'date': datetime.datetime(2024, 5, 12)
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Query única para obter top 3 estudantes
+        cur.execute('''
+            WITH student_grades AS (
+                SELECT 
+                    s.person_person_id,
+                    p.name as student_name,
+                    AVG(r.grade) as average_grade,
+                    ARRAY_AGG(DISTINCT ea.activity_id) as activities,
+                    ROW_NUMBER() OVER (ORDER BY AVG(r.grade) DESC) as rank
+                FROM student s
+                JOIN person p ON s.person_person_id = p.person_id
+                LEFT JOIN result r ON s.person_person_id = r.student_person_person_id
+                LEFT JOIN extraactivities_student eas ON s.person_person_id = eas.student_person_person_id
+                LEFT JOIN extraactivities ea ON eas.extraactivities_activity_id = ea.activity_id
+                WHERE EXTRACT(YEAR FROM r.date) = EXTRACT(YEAR FROM CURRENT_DATE)
+                GROUP BY s.person_person_id, p.name
+            )
+            SELECT 
+                sg.student_name,
+                sg.average_grade,
+                sg.activities,
+                e.edition_id,
+                c.name as course_name,
+                r.grade,
+                r.date
+            FROM student_grades sg
+            JOIN result r ON sg.person_person_id = r.student_person_person_id
+            JOIN edition e ON r.edition_edition_id = e.edition_id
+            JOIN course c ON e.course_course_id = c.course_id
+            WHERE sg.rank <= 3
+            ORDER BY sg.average_grade DESC, r.date DESC
+        ''')
+        
+        current_student = None
+        results = []
+        student_data = {}
+        
+        for row in cur.fetchall():
+            student_name = row[0]
+            
+            if student_name != current_student:
+                if current_student is not None:
+                    results.append(student_data)
+                current_student = student_name
+                student_data = {
+                    'student_name': student_name,
+                    'average_grade': float(row[1]),
+                    'grades': [],
+                    'activities': row[2] if row[2] is not None else []
                 }
-            ],
-            'activities': [random.randint(1, 200), random.randint(1, 200)]
-        },
-        {
-            'student_name': "Jane Doe",
-            'average_grade': 16.3,
-            'grades': [
-                {
-                    'course_edition_id': random.randint(1, 200),
-                    'course_edition_name': "another course",
-                    'grade': 15.1,
-                    'date': datetime.datetime(2023, 5, 11)
-                }
-            ],
-            'activities': [random.randint(1, 200)]
-        }
-    ]
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultTop3}
-    return flask.jsonify(response)
+            
+            student_data['grades'].append({
+                'course_edition_id': row[3],
+                'course_edition_name': row[4],
+                'grade': float(row[5]) if row[5] is not None else None,
+                'date': row[6].strftime('%Y-%m-%d') if row[6] is not None else None
+            })
+        
+        if current_student is not None:
+            results.append(student_data)
+            
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': results
+        })
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error getting top 3 students: {error}')
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+        
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/report', methods=['GET'])
 @token_required
 def monthly_report():
+    # Verificar se o usuário é staff
+    if flask.g.role != 'staff':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff members can access this information',
+            'results': None
+        }), 403
 
-    resultReport = [ # TODO
-        {
-            'month': "month_0",
-            'course_edition_id': random.randint(1, 200),
-            'course_edition_name': "Some course",
-            'approved': 20,
-            'evaluated': 23
-        },
-        {
-            'month': "month_1",
-            'course_edition_id': random.randint(1, 200),
-            'course_edition_name': "Another course",
-            'approved': 200,
-            'evaluated': 123
-        }
-    ]
-
-    response = {'status': StatusCodes['success'], 'errors': None, 'results': resultReport}
-    return flask.jsonify(response)
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Query única para obter relatório mensal dos últimos 12 meses
+        cur.execute('''
+            WITH monthly_stats AS (
+                SELECT 
+                    TO_CHAR(r.date, 'YYYY-MM') as month,
+                    e.edition_id,
+                    c.name as course_name,
+                    COUNT(DISTINCT r.student_person_person_id) as evaluated,
+                    COUNT(DISTINCT CASE WHEN r.grade >= 10 THEN r.student_person_person_id END) as approved,
+                    ROW_NUMBER() OVER (PARTITION BY TO_CHAR(r.date, 'YYYY-MM') 
+                                     ORDER BY COUNT(DISTINCT CASE WHEN r.grade >= 10 
+                                                                 THEN r.student_person_person_id END) DESC) as rank
+                FROM result r
+                JOIN edition e ON r.edition_edition_id = e.edition_id
+                JOIN course c ON e.course_course_id = c.course_id
+                WHERE r.date >= CURRENT_DATE - INTERVAL '12 months'
+                GROUP BY month, e.edition_id, c.name
+            )
+            SELECT 
+                month,
+                edition_id,
+                course_name,
+                approved,
+                evaluated
+            FROM monthly_stats
+            WHERE rank = 1
+            ORDER BY month DESC
+        ''')
+        
+        results = []
+        for month, edition_id, course_name, approved, evaluated in cur.fetchall():
+            results.append({
+                'month': month,
+                'course_edition_id': edition_id,
+                'course_edition_name': course_name,
+                'approved': approved,
+                'evaluated': evaluated
+            })
+            
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': results
+        })
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error generating monthly report: {error}')
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+        
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/auth-test', methods=['GET'])
 @token_required
