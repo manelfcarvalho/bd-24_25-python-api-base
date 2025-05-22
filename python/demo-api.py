@@ -37,102 +37,6 @@ StatusCodes = {
 
 
 ##########################################################
-## DEMO ENDPOINTS
-## (the endpoints get_all_departments and add_departments serve only as examples!)
-##########################################################
-
-##
-## Demo GET
-##
-## Obtain all departments in JSON format
-##
-
-@app.route('/departments/', methods=['GET'])
-def get_all_departments():
-    logger.info('GET /departments')
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute('SELECT ndep, nome, local FROM dep')
-        rows = cur.fetchall()
-
-        logger.debug('GET /departments - parse')
-        Results = []
-        for row in rows:
-            logger.debug(row)
-            content = {'ndep': int(row[0]), 'nome': row[1], 'localidade': row[2]}
-            Results.append(content)  # appending to the payload to be returned
-
-        response = {'status': StatusCodes['success'], 'results': Results}
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'GET /departments - error: {error}')
-        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-
-##
-## Demo POST
-##
-## Add a new department in a JSON payload
-##
-
-@app.route('/departments/', methods=['POST'])
-def add_departments():
-    logger.info('POST /departments')
-    payload = flask.request.get_json()
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    logger.debug(f'POST /departments - payload: {payload}')
-
-    # do not forget to validate every argument, e.g.,:
-    if 'ndep' not in payload:
-        response = {'status': StatusCodes['api_error'], 'results': 'ndep value not in payload'}
-        return flask.jsonify(response)
-
-    # parameterized queries, good for security and performance
-    statement = 'INSERT INTO dep (ndep, nome, local) VALUES (%s, %s, %s)'
-    values = (payload['ndep'], payload['nome'], payload['localidade'])
-
-    try:
-        cur.execute(statement, values)
-
-        # commit the transaction
-        conn.commit()
-        response = {'status': StatusCodes['success'], 'results': f'Inserted dep {payload["ndep"]}'}
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'POST /departments - error: {error}')
-        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-        # an error occurred, rollback
-        conn.rollback()
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-
-##########################################################
-## DEMO ENDPOINTS END
-##########################################################
-
-
-
-
-
-
-
-##########################################################
 ## DATABASE ACCESS
 ##########################################################
 
@@ -159,7 +63,7 @@ def token_required(f):
 
         if not token:
             return flask.jsonify({'status': StatusCodes['unauthorized'], 'errors': 'Token is missing!', 'results': None})
-        
+
         try:
             # Strip 'Bearer ' prefix if present
             if token.startswith('Bearer '):
@@ -206,8 +110,8 @@ def add_person():
         # Primeiro inserir na tabela person
         stmt = '''
             INSERT INTO person
-                (name, age, gender, nif, email, address, phone, password)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (name, age, gender, nif, email, address, phone, password)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING person_id
         '''
         vals = (
@@ -229,6 +133,9 @@ def add_person():
         
         if role:
             if role == 'student':
+                # Verificar se já existe um major especificado
+                major_id = payload.get('major_id')
+                
                 # Adicionar campos obrigatórios para student se não fornecidos
                 enrolment_date = payload.get('enrolment_date', datetime.date.today())
                 mean = payload.get('mean', 0.0)
@@ -238,6 +145,18 @@ def add_person():
                     INSERT INTO student (person_person_id, enrolment_date, mean)
                     VALUES (%s, %s, %s)
                 ''', (person_id, enrolment_date, mean))
+                
+                # Se foi especificado um major, criar a matrícula
+                if major_id:
+                    # Criar conta de taxas
+                    cur.execute('INSERT INTO fees_account (values_acumulate) VALUES (0) RETURNING fees_account_id')
+                    fees_account_id = cur.fetchone()[0]
+                    
+                    # Matricular no major
+                    cur.execute('''
+                        INSERT INTO major_info (student_person_person_id, major_major_id, fees, status, fees_account_fees_account_id)
+                        VALUES (%s, %s, %s, 'Active', %s)
+                    ''', (person_id, major_id, 5000.00, fees_account_id))
                 
             elif role in ['instructor', 'staff']:
                 # Adicionar campos obrigatórios para worker se não fornecidos
@@ -283,25 +202,13 @@ def add_person():
                         INSERT INTO staff (worker_person_person_id)
                         VALUES (%s)
                     ''', (person_id,))
-            else:
-                # Role inválida
-                conn.rollback()
-                response = {
-                    'status': StatusCodes['api_error'],
-                    'errors': f'Invalid role: {role}. Must be one of: student, instructor, staff'
-                }
-                return flask.jsonify(response), 400
 
         conn.commit()
         response = {
             'status': StatusCodes['success'],
             'results': {
                 'person_id': person_id,
-                'role': role,
-                'login_credentials': {
-                    'email': payload.get('email'),
-                    'password': payload['password']
-                }
+                'role': role
             }
         }
         return flask.jsonify(response), 201
@@ -647,18 +554,130 @@ def register_instructor():
         if conn is not None:
             conn.close()
 
-@app.route('/dbproj/enroll_degree/<degree_id>', methods=['POST'])
+@app.route('/dbproj/enroll_degree/<int:major_id>', methods=['POST'])
 @token_required
-def enroll_degree(degree_id):
-    data = flask.request.get_json()
-    student_id = data.get('student_id')
-    date = data.get('date')
+def enroll_degree(major_id):
+    # Verificar se o usuário é estudante
+    if flask.g.role != 'student':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only students can enroll in majors',
+            'results': None
+        }), 403
 
-    if not student_id or not date:
-        return flask.jsonify({'status': StatusCodes['api_error'], 'errors': 'Student ID and date are required', 'results': None})
+    conn = db_connection()
+    cur = conn.cursor()
     
-    response = {'status': StatusCodes['success'], 'errors': None}
-    return flask.jsonify(response)
+    try:
+        # Verificar se o estudante já está matriculado em algum major
+        cur.execute('''
+            SELECT m.major_name 
+            FROM major_info mi
+            JOIN major m ON mi.major_major_id = m.major_id
+            WHERE mi.student_person_person_id = %s AND mi.status = 'Active'
+        ''', (flask.g.person_id,))
+        
+        existing_major = cur.fetchone()
+        if existing_major:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': f'Student is already enrolled in major: {existing_major[0]}. Must unenroll first.',
+                'results': None
+            }), 400
+
+        # Verificar se o major existe
+        cur.execute('SELECT major_name FROM major WHERE major_id = %s', (major_id,))
+        major = cur.fetchone()
+        if not major:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Major not found',
+                'results': None
+            }), 404
+
+        # Criar nova conta de taxas
+        cur.execute('INSERT INTO fees_account (values_acumulate) VALUES (0) RETURNING fees_account_id')
+        fees_account_id = cur.fetchone()[0]
+
+        # Matricular o estudante no novo major
+        cur.execute('''
+            INSERT INTO major_info (student_person_person_id, major_major_id, fees, status, fees_account_fees_account_id)
+            VALUES (%s, %s, %s, 'Active', %s)
+        ''', (flask.g.person_id, major_id, 5000.00, fees_account_id))
+
+        conn.commit()
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': f'Successfully enrolled in major: {major[0]}'
+        })
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        })
+    finally:
+        if conn is not None:
+            conn.close()
+
+@app.route('/dbproj/unenroll_degree', methods=['POST'])
+@token_required
+def unenroll_degree():
+    # Verificar se o usuário é estudante
+    if flask.g.role != 'student':
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only students can unenroll from majors',
+            'results': None
+        }), 403
+
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Verificar se o estudante está matriculado em algum major
+        cur.execute('''
+            SELECT m.major_name, mi.major_major_id
+            FROM major_info mi
+            JOIN major m ON mi.major_major_id = m.major_id
+            WHERE mi.student_person_person_id = %s AND mi.status = 'Active'
+        ''', (flask.g.person_id,))
+        
+        current_major = cur.fetchone()
+        if not current_major:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Student is not enrolled in any major',
+                'results': None
+            }), 400
+
+        # Inativar a matrícula atual
+        cur.execute('''
+            UPDATE major_info 
+            SET status = 'Inactive'
+            WHERE student_person_person_id = %s AND major_major_id = %s
+        ''', (flask.g.person_id, current_major[1]))
+
+        conn.commit()
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': f'Successfully unenrolled from major: {current_major[0]}'
+        })
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        conn.rollback()
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        })
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/dbproj/enroll_activity/<activity_id>', methods=['POST'])
 @token_required
@@ -691,7 +710,7 @@ def submit_grades(course_edition_id):
     response = {'status': StatusCodes['success'], 'errors': None}
     return flask.jsonify(response)
 
-@app.route('/dbproj/student_details/<student_id>', methods=['GET'])
+@app.route('/dbproj/student_details/<int:student_id>', methods=['GET'])
 @token_required
 def student_details(student_id):
     # Verificar se o usuário é staff ou o próprio estudante
@@ -706,34 +725,90 @@ def student_details(student_id):
     cur = conn.cursor()
     
     try:
-        # Buscar detalhes dos cursos do estudante com suas notas
+        # Buscar informações do estudante e seu major atual
         cur.execute('''
+            WITH student_info AS (
+                SELECT 
+                    p.name as student_name,
+                    p.email,
+                    p.address,
+                    s.enrolment_date,
+                    s.mean as overall_mean
+                FROM student s
+                JOIN person p ON s.person_person_id = p.person_id
+                WHERE s.person_person_id = %s
+            ),
+            current_major AS (
+                SELECT 
+                    m.major_name,
+                    m.major_id,
+                    mi.fees,
+                    mi.status
+                FROM major_info mi
+                JOIN major m ON mi.major_major_id = m.major_id
+                WHERE mi.student_person_person_id = %s AND mi.status = 'Active'
+            ),
+            course_results AS (
+                SELECT 
+                    e.edition_id,
+                    c.name as course_name,
+                    e.year,
+                    r.grade
+                FROM result r
+                JOIN edition e ON r.edition_edition_id = e.edition_id
+                JOIN course c ON e.course_course_id = c.course_id
+                WHERE r.student_person_person_id = %s
+                ORDER BY e.year DESC, e.edition_id DESC
+            )
             SELECT 
-                e.edition_id,
-                c.name as course_name,
-                e.year,
-                r.grade
-            FROM student s
-            JOIN result r ON s.person_person_id = r.student_person_person_id
-            JOIN edition e ON r.edition_edition_id = e.edition_id
-            JOIN course c ON e.course_course_id = c.course_id
-            WHERE s.person_person_id = %s
-            ORDER BY e.year DESC, e.edition_id DESC
-        ''', (student_id,))
+                si.*,
+                cm.*,
+                json_agg(
+                    json_build_object(
+                        'course_edition_id', cr.edition_id,
+                        'course_name', cr.course_name,
+                        'year', cr.year,
+                        'grade', cr.grade
+                    )
+                ) as course_results
+            FROM student_info si
+            LEFT JOIN current_major cm ON true
+            LEFT JOIN course_results cr ON true
+            GROUP BY 
+                si.student_name, si.email, si.address, si.enrolment_date, si.overall_mean,
+                cm.major_name, cm.major_id, cm.fees, cm.status
+        ''', (student_id, student_id, student_id))
         
-        results = []
-        for edition_id, course_name, year, grade in cur.fetchall():
-            results.append({
-                'course_edition_id': edition_id,
-                'course_name': course_name,
-                'course_edition_year': year,
-                'grade': float(grade) if grade is not None else None
-            })
+        result = cur.fetchone()
+        if not result:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Student not found',
+                'results': None
+            }), 404
             
+        # Processar os resultados
+        student_name, email, address, enrolment_date, overall_mean, major_name, major_id, fees, major_status, course_results = result
+        
         return flask.jsonify({
             'status': StatusCodes['success'],
             'errors': None,
-            'results': results
+            'results': {
+                'student_info': {
+                    'name': student_name,
+                    'email': email,
+                    'address': address,
+                    'enrolment_date': enrolment_date.strftime('%Y-%m-%d') if enrolment_date else None,
+                    'overall_mean': float(overall_mean) if overall_mean is not None else None
+                },
+                'current_major': {
+                    'name': major_name,
+                    'major_id': major_id,
+                    'fees': float(fees) if fees is not None else None,
+                    'status': major_status
+                } if major_name else None,
+                'course_results': course_results if course_results and course_results[0] is not None else []
+            }
         })
         
     except (Exception, psycopg2.DatabaseError) as error:
@@ -1207,6 +1282,167 @@ def student_portal():
     finally:
         if conn is not None:
             conn.close()
+
+@app.route('/dbproj/student/financial-status/<int:student_id>', methods=['GET'])
+@token_required
+def student_financial_status(student_id):
+    # Verificar se o usuário é staff ou o próprio estudante
+    if flask.g.role != 'staff' and str(flask.g.person_id) != str(student_id):
+        return flask.jsonify({
+            'status': StatusCodes['unauthorized'],
+            'errors': 'Only staff or the student themselves can access this information',
+            'results': None
+        }), 403
+
+    conn = db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Obter informações de todos os majors e seus custos
+        cur.execute('''
+            WITH major_costs AS (
+                SELECT 
+                    m.student_person_person_id,
+                    m.major_name,
+                    m.tuition_fee,
+                    m.enrollment_date,
+                    COALESCE(SUM(mp.amount), 0) as total_paid,
+                    ROW_NUMBER() OVER (PARTITION BY m.student_person_person_id ORDER BY m.enrollment_date DESC) as major_order
+                FROM major_info m
+                LEFT JOIN major_payments mp ON m.student_person_person_id = mp.student_person_person_id 
+                    AND m.major_name = mp.major_name
+                WHERE m.student_person_person_id = %s
+                GROUP BY m.student_person_person_id, m.major_name, m.tuition_fee, m.enrollment_date
+            ),
+            extra_activities_costs AS (
+                SELECT 
+                    ea.student_person_person_id,
+                    e.name as activity_name,
+                    e.fee as activity_fee,
+                    COALESCE(SUM(ef.amount_paid), 0) as total_paid
+                FROM extraactivities_student ea
+                JOIN extraactivities e ON ea.extraactivities_activity_id = e.activity_id
+                LEFT JOIN extraactivities_fees ef ON ea.student_person_person_id = ef.student_person_person_id 
+                    AND ea.extraactivities_activity_id = ef.extraactivities_activity_id
+                WHERE ea.student_person_person_id = %s
+                GROUP BY ea.student_person_person_id, e.name, e.fee
+            )
+            SELECT 
+                json_agg(
+                    json_build_object(
+                        'major_name', mc.major_name,
+                        'tuition_fee', mc.tuition_fee,
+                        'total_paid', mc.total_paid,
+                        'enrollment_date', mc.enrollment_date
+                    )
+                ) as majors,
+                json_agg(
+                    json_build_object(
+                        'activity_name', eac.activity_name,
+                        'activity_fee', eac.activity_fee,
+                        'total_paid', eac.total_paid
+                    )
+                ) as extra_activities
+            FROM major_costs mc
+            LEFT JOIN extra_activities_costs eac ON mc.student_person_person_id = eac.student_person_person_id
+            GROUP BY mc.student_person_person_id
+        ''', (student_id, student_id))
+        
+        result = cur.fetchone()
+        
+        if result is None or result[0] is None:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Student not found or not enrolled in any major',
+                'results': None
+            }), 404
+            
+        majors_data, extra_activities = result
+        
+        # Processar informações dos majors
+        majors = []
+        total_majors_fees = 0
+        total_majors_paid = 0
+        
+        for major in majors_data:
+            tuition_fee = float(major['tuition_fee']) if major['tuition_fee'] else 0
+            total_paid = float(major['total_paid']) if major['total_paid'] else 0
+            pending = tuition_fee - total_paid
+            
+            majors.append({
+                'name': major['major_name'],
+                'enrollment_date': major['enrollment_date'].strftime('%Y-%m-%d') if major['enrollment_date'] else None,
+                'tuition_fee': tuition_fee,
+                'paid': total_paid,
+                'pending': pending
+            })
+            
+            total_majors_fees += tuition_fee
+            total_majors_paid += total_paid
+        
+        # Processar atividades extracurriculares
+        activities = []
+        total_activities_fees = 0
+        total_activities_paid = 0
+        
+        if extra_activities and extra_activities[0] is not None:
+            for activity in extra_activities:
+                if activity['activity_name'] is not None:  # Verificar se a atividade é válida
+                    activity_fee = float(activity['activity_fee']) if activity['activity_fee'] else 0
+                    total_paid = float(activity['total_paid']) if activity['total_paid'] else 0
+                    pending = activity_fee - total_paid
+                    
+                    activities.append({
+                        'name': activity['activity_name'],
+                        'total_fee': activity_fee,
+                        'paid': total_paid,
+                        'pending': pending
+                    })
+                    
+                    total_activities_fees += activity_fee
+                    total_activities_paid += total_paid
+        
+        # Calcular totais gerais
+        total_fees = total_majors_fees + total_activities_fees
+        total_paid = total_majors_paid + total_activities_paid
+        total_pending = total_fees - total_paid
+        
+        return flask.jsonify({
+            'status': StatusCodes['success'],
+            'errors': None,
+            'results': {
+                'majors': majors,
+                'majors_summary': {
+                    'total_fees': total_majors_fees,
+                    'total_paid': total_majors_paid,
+                    'total_pending': total_majors_fees - total_majors_paid
+                },
+                'extra_activities': activities,
+                'activities_summary': {
+                    'total_fees': total_activities_fees,
+                    'total_paid': total_activities_paid,
+                    'total_pending': total_activities_fees - total_activities_paid
+                },
+                'overall_summary': {
+                    'total_fees': total_fees,
+                    'total_paid': total_paid,
+                    'total_pending': total_pending
+                }
+            }
+        })
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f'Error getting student financial status: {error}')
+        return flask.jsonify({
+            'status': StatusCodes['internal_error'],
+            'errors': str(error),
+            'results': None
+        }), 500
+        
+    finally:
+        if conn is not None:
+            conn.close()
+
 
 @app.route('/dbproj/top_by_district/', methods=['GET'])
 @token_required
