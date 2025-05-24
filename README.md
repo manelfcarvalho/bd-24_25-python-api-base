@@ -46,6 +46,33 @@ To execute this project it is required to have installed:
   - `flask` (**conda install flask**)
   - `jwt` (**pip install pyjwt**)
 
+## Database Setup
+
+To set up the database for this project, follow these steps:
+
+1. Create the database (if not already created):
+   ```bash
+   createdb projeto
+   ```
+
+2. Create the database schema (tables and relationships):
+   ```bash
+   psql -U aulaspl -d projeto -f sql/schema.sql
+   ```
+
+3. Install the database triggers:
+   ```bash
+   psql -U aulaspl -d projeto -f sql/triggers.sql
+   ```
+
+The triggers implemented in this project are:
+
+1. **trigger_update_mean**: Automatically updates a student's mean grade whenever a new grade is added or updated.
+2. **trigger_payment_status**: Updates payment status to 'Paid' when fees are fully paid for both majors and extra activities.
+3. **trigger_check_capacity**: Prevents student enrollment in a course when the maximum capacity is reached.
+
+These triggers ensure data consistency and automate important business rules in the database.
+
 ## Support
 
 If you find an issue or have questions regarding the demo feel free to contact me: [jrcampos@dei.uc.pt](mailto:jrcampos@dei.uc.pt)
