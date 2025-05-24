@@ -127,7 +127,7 @@ def add_person():
 
         cur.execute(stmt, vals)
         person_id = cur.fetchone()[0]
-        
+
         conn.commit()
         response = {
             'status': StatusCodes['success'],
@@ -291,7 +291,7 @@ def register_student():
 
     data = flask.request.get_json()
     person_id = data.get('person_id')
-    enrolment_date = data.get('enrolment_date', datetime.date.today())
+    enrolment_date = datetime.date.today()  # Use today's date by default
     mean = data.get('mean', 0.0)
     major_id = data.get('major_id')  # Opcional
 
@@ -380,7 +380,7 @@ def register_staff():
     data = flask.request.get_json()
     person_id = data.get('person_id')
     salary = data.get('salary', 0.0)
-    started_working = data.get('started_working', datetime.date.today())
+    started_working = datetime.date.today()  # Use today's date by default
 
     if not person_id:
         return flask.jsonify({
@@ -569,29 +569,13 @@ def enroll_degree(major_id):
     
     try:
         # Verificar se o estudante existe
-        cur.execute('SELECT person_id FROM student WHERE person_person_id = %s', (student_id,))
+        cur.execute('SELECT person_person_id FROM student WHERE person_person_id = %s', (student_id,))
         if cur.fetchone() is None:
             return flask.jsonify({
                 'status': StatusCodes['api_error'],
                 'errors': 'Student not found',
                 'results': None
             }), 404
-
-        # Verificar se o estudante já está matriculado em algum major
-        cur.execute('''
-            SELECT m.major_name 
-            FROM major_info mi
-            JOIN major m ON mi.major_major_id = m.major_id
-            WHERE mi.student_person_person_id = %s AND mi.status = 'Active'
-        ''', (student_id,))
-        
-        existing_major = cur.fetchone()
-        if existing_major:
-            return flask.jsonify({
-                'status': StatusCodes['api_error'],
-                'errors': f'Student is already enrolled in major: {existing_major[0]}. Must unenroll first.',
-                'results': None
-            }), 400
 
         # Verificar se o major existe
         cur.execute('SELECT major_name FROM major WHERE major_id = %s', (major_id,))
@@ -603,15 +587,44 @@ def enroll_degree(major_id):
                 'results': None
             }), 404
 
-        # Criar nova conta de taxas
-        cur.execute('INSERT INTO fees_account (values_acumulate) VALUES (0) RETURNING fees_account_id')
-        fees_account_id = cur.fetchone()[0]
-
-        # Matricular o estudante no novo major
+        # Verificar se o estudante já tem algum registro em major_info
         cur.execute('''
-            INSERT INTO major_info (student_person_person_id, major_major_id, fees, status, fees_account_fees_account_id)
-            VALUES (%s, %s, %s, 'Active', %s)
-        ''', (student_id, major_id, 5000.00, fees_account_id))
+            SELECT mi.status, m.major_name, mi.fees_account_fees_account_id
+            FROM major_info mi
+            JOIN major m ON mi.major_major_id = m.major_id
+            WHERE mi.student_person_person_id = %s
+        ''', (student_id,))
+        
+        existing_record = cur.fetchone()
+        
+        if existing_record:
+            if existing_record[0] == 'Active':
+                return flask.jsonify({
+                    'status': StatusCodes['api_error'],
+                    'errors': f'Student is already enrolled in major: {existing_record[1]}. Must unenroll first.',
+                    'results': None
+                }), 400
+            else:
+                # Se existe um registro inativo, atualizar para o novo major
+                cur.execute('''
+                    UPDATE major_info 
+                    SET major_major_id = %s, 
+                        status = 'Active',
+                        fees = 5000.00
+                    WHERE student_person_person_id = %s
+                    RETURNING fees_account_fees_account_id
+                ''', (major_id, student_id))
+                fees_account_id = cur.fetchone()[0]
+        else:
+            # Criar nova conta de taxas
+            cur.execute('INSERT INTO fees_account (values_acumulate) VALUES (0) RETURNING fees_account_id')
+            fees_account_id = cur.fetchone()[0]
+
+            # Matricular o estudante no novo major
+            cur.execute('''
+                INSERT INTO major_info (student_person_person_id, major_major_id, fees, status, fees_account_fees_account_id)
+                VALUES (%s, %s, %s, 'Active', %s)
+            ''', (student_id, major_id, 5000.00, fees_account_id))
 
         conn.commit()
         return flask.jsonify({
@@ -663,7 +676,7 @@ def unenroll_degree():
     
     try:
         # Verificar se o estudante existe
-        cur.execute('SELECT person_id FROM student WHERE person_person_id = %s', (student_id,))
+        cur.execute('SELECT person_person_id FROM student WHERE person_person_id = %s', (student_id,))
         if cur.fetchone() is None:
             return flask.jsonify({
                 'status': StatusCodes['api_error'],
@@ -691,8 +704,16 @@ def unenroll_degree():
         cur.execute('''
             UPDATE major_info 
             SET status = 'Inactive'
-            WHERE student_person_person_id = %s AND major_major_id = %s
+            WHERE student_person_person_id = %s AND major_major_id = %s AND status = 'Active'
+            RETURNING major_major_id
         ''', (student_id, current_major[1]))
+        
+        if cur.fetchone() is None:
+            return flask.jsonify({
+                'status': StatusCodes['api_error'],
+                'errors': 'Failed to update major status. The student might already be inactive.',
+                'results': None
+            }), 400
 
         conn.commit()
         return flask.jsonify({
@@ -712,7 +733,7 @@ def unenroll_degree():
             'status': StatusCodes['internal_error'],
             'errors': str(error),
             'results': None
-        })
+        }), 500
     finally:
         if conn is not None:
             conn.close()
@@ -733,7 +754,7 @@ def enroll_activity(activity_id):
     
     try:
         # Verificar se a atividade existe
-        cur.execute('SELECT activity_id, name, fee FROM extraactivities WHERE activity_id = %s', (activity_id,))
+        cur.execute('SELECT activity_id, name FROM extraactivities WHERE activity_id = %s', (activity_id,))
         activity = cur.fetchone()
         if not activity:
             return flask.jsonify({
@@ -756,18 +777,22 @@ def enroll_activity(activity_id):
                 'results': None
             }), 400
 
+        # Criar uma nova conta de taxas para a atividade
+        cur.execute('INSERT INTO fees_account (values_acumulate) VALUES (0) RETURNING fees_account_id')
+        fees_account_id = cur.fetchone()[0]
+
         # Inscrever o estudante na atividade
         cur.execute('''
             INSERT INTO extraactivities_student (student_person_person_id, extraactivities_activity_id)
             VALUES (%s, %s)
         ''', (flask.g.person_id, activity_id))
 
-        # Se a atividade tem taxa, criar registro de taxa
-        if activity[2] > 0:  # activity[2] é o fee
-            cur.execute('''
-                INSERT INTO extraactivities_fees (student_person_person_id, extraactivities_activity_id, amount_paid)
-                VALUES (%s, %s, 0)
-            ''', (flask.g.person_id, activity_id))
+        # Criar registro de taxas para a atividade (assumindo uma taxa padrão de 50)
+        cur.execute('''
+            INSERT INTO extraactivities_fees 
+            (student_person_person_id, extraactivities_activity_id, fees, status, fees_account_fees_account_id)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (flask.g.person_id, activity_id, 50.0, 'Pending', fees_account_id))
 
         conn.commit()
         return flask.jsonify({
@@ -777,7 +802,9 @@ def enroll_activity(activity_id):
                 'message': f'Successfully enrolled in activity: {activity[1]}',
                 'activity_id': activity[0],
                 'activity_name': activity[1],
-                'fee': float(activity[2]) if activity[2] else 0.0
+                'fees_account_id': fees_account_id,
+                'fees': 50.0,
+                'status': 'Pending'
             }
         })
 
@@ -819,7 +846,7 @@ def enroll_course_edition(course_edition_id):
     try:
         # Verificar se a edição do curso existe
         cur.execute('''
-            SELECT e.edition_id, c.name, e.year, e.capacity 
+            SELECT e.edition_id, c.course_name, e.capacity, c.course_id
             FROM edition e
             JOIN course c ON e.course_course_id = c.course_id
             WHERE e.edition_id = %s
@@ -833,17 +860,17 @@ def enroll_course_edition(course_edition_id):
                 'results': None
             }), 404
 
-        # Verificar se o estudante já está inscrito nesta edição
+        # Verificar se o estudante já está inscrito neste curso
         cur.execute('''
-            SELECT edition_edition_id 
+            SELECT course_course_id 
             FROM student_course 
-            WHERE student_person_person_id = %s AND edition_edition_id = %s
-        ''', (flask.g.person_id, course_edition_id))
+            WHERE student_person_person_id = %s AND course_course_id = %s
+        ''', (flask.g.person_id, edition[3]))  # edition[3] é o course_id
         
         if cur.fetchone():
             return flask.jsonify({
                 'status': StatusCodes['api_error'],
-                'errors': 'Student is already enrolled in this course edition',
+                'errors': 'Student is already enrolled in this course',
                 'results': None
             }), 400
 
@@ -851,11 +878,11 @@ def enroll_course_edition(course_edition_id):
         cur.execute('''
             SELECT COUNT(*) 
             FROM student_course 
-            WHERE edition_edition_id = %s
-        ''', (course_edition_id,))
+            WHERE course_course_id = %s
+        ''', (edition[3],))
         
         current_enrollments = cur.fetchone()[0]
-        if current_enrollments >= edition[3]:  # edition[3] é a capacidade
+        if current_enrollments >= edition[2]:  # edition[2] é a capacidade
             return flask.jsonify({
                 'status': StatusCodes['api_error'],
                 'errors': 'Course edition is at maximum capacity',
@@ -867,28 +894,29 @@ def enroll_course_edition(course_edition_id):
         cur.execute(f'''
             SELECT class_id 
             FROM class 
-            WHERE edition_edition_id = %s AND class_id IN ({class_placeholders})
-        ''', (course_edition_id, *classes))
+            WHERE class_id IN ({class_placeholders})
+        ''', classes)
         
-        valid_classes = cur.fetchall()
-        if len(valid_classes) != len(classes):
+        valid_classes = {r[0] for r in cur.fetchall()}
+        invalid_classes = [cid for cid in classes if cid not in valid_classes]
+        if invalid_classes:
             return flask.jsonify({
                 'status': StatusCodes['api_error'],
-                'errors': 'One or more invalid class IDs provided',
+                'errors': f'Invalid class IDs: {invalid_classes}',
                 'results': None
             }), 400
 
-        # Inscrever o estudante na edição do curso
+        # Inscrever o estudante no curso
         cur.execute('''
-            INSERT INTO student_course (student_person_person_id, edition_edition_id)
+            INSERT INTO student_course (student_person_person_id, course_course_id)
             VALUES (%s, %s)
-        ''', (flask.g.person_id, course_edition_id))
+        ''', (flask.g.person_id, edition[3]))
 
-        # Inscrever o estudante em cada classe
+        # Criar registros de presença para cada classe
         for class_id in classes:
             cur.execute('''
-                INSERT INTO student_class (student_person_person_id, class_class_id)
-                VALUES (%s, %s)
+                INSERT INTO attendance (student_person_person_id, class_class_id, present)
+                VALUES (%s, %s, false)
             ''', (flask.g.person_id, class_id))
 
         conn.commit()
@@ -896,11 +924,11 @@ def enroll_course_edition(course_edition_id):
             'status': StatusCodes['success'],
             'errors': None,
             'results': {
-                'message': f'Successfully enrolled in course edition: {edition[1]} ({edition[2]})',
+                'message': f'Successfully enrolled in course: {edition[1]}',
                 'course_edition_id': edition[0],
                 'course_name': edition[1],
-                'year': edition[2],
-                'enrolled_classes': classes
+                'course_id': edition[3],
+                'enrolled_classes': list(classes)
             }
         })
 
@@ -943,7 +971,7 @@ def submit_grades(course_edition_id):
     try:
         # Verificar se a edição do curso existe e se o instrutor é o coordenador
         cur.execute('''
-            SELECT e.edition_id, c.name, e.year
+            SELECT e.edition_id, c.course_name, e.exam_exam_id
             FROM edition e
             JOIN course c ON e.course_course_id = c.course_id
             WHERE e.edition_id = %s AND e.coordinator_instructor_worker_person_person_id = %s
@@ -963,8 +991,9 @@ def submit_grades(course_edition_id):
         
         cur.execute(f'''
             SELECT student_person_person_id
-            FROM student_course
-            WHERE edition_edition_id = %s AND student_person_person_id IN ({placeholders})
+            FROM student_course sc
+            JOIN edition e ON sc.course_course_id = e.course_course_id
+            WHERE e.edition_id = %s AND sc.student_person_person_id IN ({placeholders})
         ''', (course_edition_id, *student_ids))
         
         enrolled_students = {r[0] for r in cur.fetchall()}
@@ -989,12 +1018,12 @@ def submit_grades(course_edition_id):
         # Inserir ou atualizar as notas
         results = []
         for student_id, grade in grades:
-            # Verificar se já existe uma nota para este estudante nesta edição
+            # Verificar se já existe uma nota para este estudante neste exame
             cur.execute('''
-                SELECT result_id, grade
+                SELECT result_id
                 FROM result
-                WHERE student_person_person_id = %s AND edition_edition_id = %s
-            ''', (student_id, course_edition_id))
+                WHERE student_person_person_id = %s AND exam_exam_id = %s
+            ''', (student_id, edition[2]))  # edition[2] é o exam_exam_id
             
             existing_result = cur.fetchone()
             
@@ -1002,19 +1031,26 @@ def submit_grades(course_edition_id):
                 # Atualizar nota existente
                 cur.execute('''
                     UPDATE result
-                    SET grade = %s, date = CURRENT_DATE, period = %s
+                    SET score = %s
                     WHERE result_id = %s
                     RETURNING result_id
-                ''', (grade, period, existing_result[0]))
+                ''', (grade, existing_result[0]))
                 result_id = existing_result[0]
                 action = 'updated'
             else:
+                # Primeiro garantir que o estudante está inscrito no exame
+                cur.execute('''
+                    INSERT INTO exam_student (exam_exam_id, student_person_person_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                ''', (edition[2], student_id))
+                
                 # Inserir nova nota
                 cur.execute('''
-                    INSERT INTO result (student_person_person_id, edition_edition_id, grade, date, period)
-                    VALUES (%s, %s, %s, CURRENT_DATE, %s)
+                    INSERT INTO result (student_person_person_id, exam_exam_id, score)
+                    VALUES (%s, %s, %s)
                     RETURNING result_id
-                ''', (student_id, course_edition_id, grade, period))
+                ''', (student_id, edition[2], grade))
                 result_id = cur.fetchone()[0]
                 action = 'inserted'
             
@@ -1030,7 +1066,7 @@ def submit_grades(course_edition_id):
             cur.execute('''
                 UPDATE student
                 SET mean = (
-                    SELECT AVG(grade)
+                    SELECT AVG(score)
                     FROM result
                     WHERE student_person_person_id = %s
                 )
@@ -1042,10 +1078,10 @@ def submit_grades(course_edition_id):
             'status': StatusCodes['success'],
             'errors': None,
             'results': {
-                'message': f'Successfully submitted grades for {edition[1]} ({edition[2]})',
+                'message': f'Successfully submitted grades for {edition[1]}',
                 'course_edition_id': edition[0],
                 'course_name': edition[1],
-                'year': edition[2],
+                'exam_id': edition[2],
                 'period': period,
                 'grades': results
             }
@@ -1078,29 +1114,24 @@ def student_course_details(student_id):
     
     try:
         # Verificar se o estudante existe
-        cur.execute('SELECT person_id FROM student WHERE person_person_id = %s', (student_id,))
+        cur.execute('SELECT person_person_id FROM student WHERE person_person_id = %s', (student_id,))
         if cur.fetchone() is None:
             return flask.jsonify({
                 'status': StatusCodes['api_error'],
                 'errors': 'Student not found',
                 'results': None
             }), 404
-
+            
         # Buscar todos os cursos em que o estudante está matriculado
-        # e suas notas mais recentes, ordenados por data mais recente
         cur.execute('''
             SELECT 
                 e.edition_id as course_edition_id,
-                c.name as course_name,
-                e.year as course_edition_year,
-                r.grade
+                c.course_name as course_name
             FROM student_course sc
-            JOIN edition e ON sc.edition_edition_id = e.edition_id
-            JOIN course c ON e.course_course_id = c.course_id
-            LEFT JOIN result r ON r.student_person_person_id = sc.student_person_person_id 
-                AND r.edition_edition_id = e.edition_id
+            JOIN course c ON sc.course_course_id = c.course_id
+            JOIN edition e ON c.course_id = e.course_course_id
             WHERE sc.student_person_person_id = %s
-            ORDER BY r.date DESC NULLS LAST, e.year DESC, c.name
+            ORDER BY e.edition_id DESC, c.course_name
         ''', (student_id,))
         
         results = []
@@ -1108,10 +1139,10 @@ def student_course_details(student_id):
             results.append({
                 'course_edition_id': row[0],
                 'course_name': row[1],
-                'course_edition_year': row[2],
-                'grade': float(row[3]) if row[3] is not None else None
+                'course_edition_year': None,  # Não temos o ano na tabela
+                'grade': None  # Como não temos acesso direto às notas
             })
-            
+        
         return flask.jsonify({
             'status': StatusCodes['success'],
             'errors': None,
@@ -1149,16 +1180,17 @@ def degree_details(degree_id):
         cur.execute('''
             SELECT 
                 c.course_id,
-                c.name as course_name,
+                c.course_name,
                 e.edition_id as course_edition_id,
-                e.year as course_edition_year,
+                e.capacity as course_edition_year,
                 e.capacity,
                 (SELECT COUNT(DISTINCT sc.student_person_person_id)
                  FROM student_course sc
-                 WHERE sc.edition_edition_id = e.edition_id) as enrolled_count,
+                 WHERE sc.course_course_id = c.course_id) as enrolled_count,
                 (SELECT COUNT(DISTINCT r.student_person_person_id)
                  FROM result r
-                 WHERE r.edition_edition_id = e.edition_id AND r.grade >= 9.5) as approved_count,
+                 JOIN exam ex ON r.exam_exam_id = ex.exam_id
+                 WHERE r.score >= 9.5 AND ex.exam_id = e.exam_exam_id) as approved_count,
                 e.coordinator_instructor_worker_person_person_id as coordinator_id,
                 ARRAY(
                     SELECT DISTINCT i.worker_person_person_id
@@ -1166,12 +1198,12 @@ def degree_details(degree_id):
                     JOIN assistant a ON i.worker_person_person_id = a.instructor_worker_person_person_id
                     JOIN assistant_class ac ON a.instructor_worker_person_person_id = ac.assistant_instructor_worker_person_person_id
                     JOIN class cl ON ac.class_class_id = cl.class_id
-                    WHERE cl.edition_edition_id = e.edition_id
+                    WHERE cl.class_id = e.class_class_id
                 ) as instructors
             FROM course c
             JOIN edition e ON c.course_id = e.course_course_id
-            WHERE c.degree_degree_id = %s
-            ORDER BY e.year DESC, e.edition_id DESC
+            WHERE c.course_id = %s
+            ORDER BY e.edition_id DESC
         ''', (degree_id,))
         
         results = []
@@ -1226,21 +1258,23 @@ def top3_students():
             WITH top_students AS (
                 SELECT 
                     p.name as student_name,
-                    AVG(r.grade) as average_grade,
+                    AVG(r.score) as average_grade,
                     ARRAY_AGG(DISTINCT ea.activity_id) as activities,
-                    ROW_NUMBER() OVER (ORDER BY AVG(r.grade) DESC) as rank
+                    ROW_NUMBER() OVER (ORDER BY AVG(r.score) DESC) as rank
                 FROM student s
                 JOIN person p ON s.person_person_id = p.person_id
                 JOIN result r ON s.person_person_id = r.student_person_person_id
+                JOIN exam ex ON r.exam_exam_id = ex.exam_id
+                JOIN edition e ON ex.exam_id = e.exam_exam_id
                 LEFT JOIN extraactivities_student eas ON s.person_person_id = eas.student_person_person_id
                 LEFT JOIN extraactivities ea ON eas.extraactivities_activity_id = ea.activity_id
-                WHERE EXTRACT(YEAR FROM r.date) = 
+                WHERE EXTRACT(YEAR FROM ex.data) = 
                     CASE 
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE) >= 9 THEN EXTRACT(YEAR FROM CURRENT_DATE)
                         ELSE EXTRACT(YEAR FROM CURRENT_DATE) - 1
                     END
                 GROUP BY p.name
-                HAVING COUNT(DISTINCT r.edition_edition_id) > 0
+                HAVING COUNT(DISTINCT e.edition_id) > 0
             )
             SELECT 
                 ts.student_name,
@@ -1248,10 +1282,10 @@ def top3_students():
                 json_agg(
                     json_build_object(
                         'course_edition_id', e.edition_id,
-                        'course_edition_name', c.name,
-                        'grade', r.grade,
-                        'date', r.date
-                    ) ORDER BY r.date DESC
+                        'course_name', c.course_name,
+                        'score', r.score,
+                        'exam_date', ex.data
+                    ) ORDER BY ex.data DESC
                 ) as grades,
                 ts.activities
             FROM top_students ts
@@ -1262,7 +1296,8 @@ def top3_students():
                 WHERE p2.name = ts.student_name
                 LIMIT 1
             )
-            JOIN edition e ON r.edition_edition_id = e.edition_id
+            JOIN exam ex ON r.exam_exam_id = ex.exam_id
+            JOIN edition e ON ex.exam_id = e.exam_exam_id
             JOIN course c ON e.course_course_id = c.course_id
             WHERE ts.rank <= 3
             GROUP BY ts.student_name, ts.average_grade, ts.activities, ts.rank
@@ -1273,7 +1308,7 @@ def top3_students():
         for row in cur.fetchall():
             student_name, average_grade, grades, activities = row
             results.append({
-                'student_name': student_name,
+                    'student_name': student_name,
                 'average_grade': float(average_grade),
                 'grades': grades,
                 'activities': activities if activities else []
@@ -1307,7 +1342,7 @@ def top_by_district():
             'errors': 'This endpoint is only available for staff members',
             'results': None
         }), 403
-    
+
     conn = db_connection()
     cur = conn.cursor()
     
@@ -1320,9 +1355,9 @@ def top_by_district():
                 SELECT 
                     s.person_person_id as student_id,
                     p.address as district,
-                    AVG(r.grade) as average_grade,
+                    AVG(r.score) as average_grade,
                     -- Rank dentro do distrito
-                    RANK() OVER (PARTITION BY p.address ORDER BY AVG(r.grade) DESC) as district_rank
+                    RANK() OVER (PARTITION BY p.address ORDER BY AVG(r.score) DESC) as district_rank
                 FROM student s
                 JOIN person p ON s.person_person_id = p.person_id
                 JOIN result r ON s.person_person_id = r.student_person_person_id
@@ -1345,7 +1380,7 @@ def top_by_district():
                 'district': district,
                 'average_grade': float(average_grade)
             })
-        
+            
         return flask.jsonify({
             'status': StatusCodes['success'],
             'errors': None,
@@ -1384,20 +1419,25 @@ def monthly_report():
         cur.execute('''
             WITH monthly_course_stats AS (
                 SELECT 
-                    TO_CHAR(r.date, 'YYYY-MM') as month,
+                    TO_CHAR(ex.data, 'YYYY-MM') as month,
                     e.edition_id as course_edition_id,
-                    c.name as course_edition_name,
+                    c.course_name as course_edition_name,
                     COUNT(DISTINCT r.student_person_person_id) as evaluated,
-                    COUNT(DISTINCT CASE WHEN r.grade >= 9.5 THEN r.student_person_person_id END) as approved,
+                    COUNT(DISTINCT CASE WHEN r.score >= 9.5 THEN r.student_person_person_id END) as approved,
                     ROW_NUMBER() OVER (
-                        PARTITION BY TO_CHAR(r.date, 'YYYY-MM')
-                        ORDER BY COUNT(DISTINCT CASE WHEN r.grade >= 9.5 THEN r.student_person_person_id END) DESC
+                        PARTITION BY TO_CHAR(ex.data, 'YYYY-MM')
+                        ORDER BY COUNT(DISTINCT CASE WHEN r.score >= 9.5 THEN r.student_person_person_id END) DESC
                     ) as rank
                 FROM result r
-                JOIN edition e ON r.edition_edition_id = e.edition_id
+                JOIN exam ex ON r.exam_exam_id = ex.exam_id
+                JOIN edition e ON ex.exam_id = e.exam_exam_id
                 JOIN course c ON e.course_course_id = c.course_id
-                WHERE r.date >= CURRENT_DATE - INTERVAL '12 months'
-                GROUP BY month, e.edition_id, c.name
+                WHERE EXTRACT(YEAR FROM ex.data) = 
+                    CASE 
+                        WHEN EXTRACT(MONTH FROM CURRENT_DATE) >= 9 THEN EXTRACT(YEAR FROM CURRENT_DATE)
+                        ELSE EXTRACT(YEAR FROM CURRENT_DATE) - 1
+                    END
+                GROUP BY month, e.edition_id, c.course_name
             )
             SELECT 
                 month,
@@ -1447,7 +1487,7 @@ def delete_student_details(student_id):
             'status': StatusCodes['unauthorized'],
             'errors': 'Only staff members can delete student data'
         }), 403
-
+    
     conn = db_connection()
     cur = conn.cursor()
     
@@ -1504,109 +1544,120 @@ def student_financial_status(student_id):
     cur = conn.cursor()
     
     try:
-        # Obter informações de todos os majors e seus custos
+        # Obter informações financeiras do estudante
         cur.execute('''
-            WITH major_costs AS (
+            WITH student_majors AS (
                 SELECT 
-                    m.student_person_person_id,
+                    s.person_person_id,
                     m.major_name,
-                    m.tuition_fee,
-                    m.enrollment_date,
-                    COALESCE(SUM(mp.amount), 0) as total_paid,
-                    ROW_NUMBER() OVER (PARTITION BY m.student_person_person_id ORDER BY m.enrollment_date DESC) as major_order
-                FROM major_info m
-                LEFT JOIN major_payments mp ON m.student_person_person_id = mp.student_person_person_id 
-                    AND m.major_name = mp.major_name
-                WHERE m.student_person_person_id = %s
-                GROUP BY m.student_person_person_id, m.major_name, m.tuition_fee, m.enrollment_date
+                    mi.fees as tuition_fee,
+                    fa.values_acumulate as paid_amount,
+                    mi.status
+                FROM student s
+                JOIN major_info mi ON s.person_person_id = mi.student_person_person_id
+                JOIN major m ON mi.major_major_id = m.major_id
+                JOIN fees_account fa ON mi.fees_account_fees_account_id = fa.fees_account_id
+                WHERE s.person_person_id = %s
             ),
-            extra_activities_costs AS (
+            student_activities AS (
                 SELECT 
-                    ea.student_person_person_id,
-                    e.name as activity_name,
-                    e.fee as activity_fee,
-                    COALESCE(SUM(ef.amount_paid), 0) as total_paid
-                FROM extraactivities_student ea
-                JOIN extraactivities e ON ea.extraactivities_activity_id = e.activity_id
-                LEFT JOIN extraactivities_fees ef ON ea.student_person_person_id = ef.student_person_person_id 
-                    AND ea.extraactivities_activity_id = ef.extraactivities_activity_id
-                WHERE ea.student_person_person_id = %s
-                GROUP BY ea.student_person_person_id, e.name, e.fee
+                    s.person_person_id,
+                    ea.name as activity_name,
+                    ef.fees as activity_fee,
+                    fa.values_acumulate as paid_amount,
+                    ef.status
+                FROM student s
+                JOIN extraactivities_student eas ON s.person_person_id = eas.student_person_person_id
+                JOIN extraactivities ea ON eas.extraactivities_activity_id = ea.activity_id
+                LEFT JOIN extraactivities_fees ef ON s.person_person_id = ef.student_person_person_id
+                    AND eas.extraactivities_activity_id = ef.extraactivities_activity_id
+                LEFT JOIN fees_account fa ON ef.fees_account_fees_account_id = fa.fees_account_id
+                WHERE s.person_person_id = %s
             )
             SELECT 
+                COALESCE(
                 json_agg(
                     json_build_object(
-                        'major_name', mc.major_name,
-                        'tuition_fee', mc.tuition_fee,
-                        'total_paid', mc.total_paid,
-                        'enrollment_date', mc.enrollment_date
-                    )
+                            'major_name', sm.major_name,
+                            'tuition_fee', sm.tuition_fee,
+                            'paid_amount', COALESCE(sm.paid_amount, 0),
+                            'pending_amount', sm.tuition_fee - COALESCE(sm.paid_amount, 0),
+                            'status', sm.status
+                        )
+                    ) FILTER (WHERE sm.major_name IS NOT NULL),
+                    '[]'
                 ) as majors,
+                COALESCE(
                 json_agg(
                     json_build_object(
-                        'activity_name', eac.activity_name,
-                        'activity_fee', eac.activity_fee,
-                        'total_paid', eac.total_paid
-                    )
-                ) as extra_activities
-            FROM major_costs mc
-            LEFT JOIN extra_activities_costs eac ON mc.student_person_person_id = eac.student_person_person_id
-            GROUP BY mc.student_person_person_id
+                            'activity_name', sa.activity_name,
+                            'activity_fee', sa.activity_fee,
+                            'paid_amount', COALESCE(sa.paid_amount, 0),
+                            'pending_amount', sa.activity_fee - COALESCE(sa.paid_amount, 0),
+                            'status', sa.status
+                        )
+                    ) FILTER (WHERE sa.activity_name IS NOT NULL),
+                    '[]'
+                ) as activities
+            FROM student_majors sm
+            FULL OUTER JOIN student_activities sa ON sm.person_person_id = sa.person_person_id;
         ''', (student_id, student_id))
         
         result = cur.fetchone()
         
-        if result is None or result[0] is None:
+        if result is None or (result[0] is None and result[1] is None):
             return flask.jsonify({
                 'status': StatusCodes['api_error'],
-                'errors': 'Student not found or not enrolled in any major',
+                'errors': 'Student not found or not enrolled in any major/activity',
                 'results': None
             }), 404
             
-        majors_data, extra_activities = result
+        majors_data, activities_data = result
         
         # Processar informações dos majors
         majors = []
         total_majors_fees = 0
         total_majors_paid = 0
         
-        for major in majors_data:
-            tuition_fee = float(major['tuition_fee']) if major['tuition_fee'] else 0
-            total_paid = float(major['total_paid']) if major['total_paid'] else 0
-            pending = tuition_fee - total_paid
-            
-            majors.append({
-                'name': major['major_name'],
-                'enrollment_date': major['enrollment_date'].strftime('%Y-%m-%d') if major['enrollment_date'] else None,
-                'tuition_fee': tuition_fee,
-                'paid': total_paid,
-                'pending': pending
-            })
-            
-            total_majors_fees += tuition_fee
-            total_majors_paid += total_paid
+        if majors_data:
+            for major in majors_data:
+                tuition_fee = float(major['tuition_fee']) if major['tuition_fee'] else 0
+                paid_amount = float(major['paid_amount']) if major['paid_amount'] else 0
+                pending_amount = float(major['pending_amount']) if major['pending_amount'] else 0
+                
+                majors.append({
+                    'name': major['major_name'],
+                    'tuition_fee': tuition_fee,
+                    'paid_amount': paid_amount,
+                    'pending_amount': pending_amount,
+                    'status': major['status']
+                })
+                
+                total_majors_fees += tuition_fee
+                total_majors_paid += paid_amount
         
         # Processar atividades extracurriculares
         activities = []
         total_activities_fees = 0
         total_activities_paid = 0
         
-        if extra_activities and extra_activities[0] is not None:
-            for activity in extra_activities:
-                if activity['activity_name'] is not None:  # Verificar se a atividade é válida
+        if activities_data:
+            for activity in activities_data:
+                if activity['activity_name'] is not None:
                     activity_fee = float(activity['activity_fee']) if activity['activity_fee'] else 0
-                    total_paid = float(activity['total_paid']) if activity['total_paid'] else 0
-                    pending = activity_fee - total_paid
+                    paid_amount = float(activity['paid_amount']) if activity['paid_amount'] else 0
+                    pending_amount = float(activity['pending_amount']) if activity['pending_amount'] else 0
                     
                     activities.append({
                         'name': activity['activity_name'],
-                        'total_fee': activity_fee,
-                        'paid': total_paid,
-                        'pending': pending
+                        'activity_fee': activity_fee,
+                        'paid_amount': paid_amount,
+                        'pending_amount': pending_amount,
+                        'status': activity['status']
                     })
                     
                     total_activities_fees += activity_fee
-                    total_activities_paid += total_paid
+                    total_activities_paid += paid_amount
         
         # Calcular totais gerais
         total_fees = total_majors_fees + total_activities_fees
@@ -1623,7 +1674,7 @@ def student_financial_status(student_id):
                     'total_paid': total_majors_paid,
                     'total_pending': total_majors_fees - total_majors_paid
                 },
-                'extra_activities': activities,
+                'activities': activities,
                 'activities_summary': {
                     'total_fees': total_activities_fees,
                     'total_paid': total_activities_paid,
